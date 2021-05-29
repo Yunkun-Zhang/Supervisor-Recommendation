@@ -1,10 +1,15 @@
-from models import Net
+from models import MetaPath
 from process_data import load_data
 import argparse
 
-ap = argparse.ArgumentParser()
-args = ap.parse_args()
+metapaths = []
+data = load_data()
+
+
+def run():
+    pass
 
 
 if __name__ == '__main__':
-    data = load_data()
+    ap = argparse.ArgumentParser()
+    args = ap.parse_args()
