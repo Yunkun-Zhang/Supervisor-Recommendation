@@ -289,7 +289,8 @@ def process(data):
     for a, f in data['author_field']:
         author_field[a].append(f)
         field_author[f].append(a)
-    field_field = defaultdict(list)
+    child_parent_field = defaultdict(list)
+    parent_child_field = defaultdict(list)
     for f1, f2 in data['field_parent']:
         field_field[f1].append(f2)
         field_field[f2].append(f1)
