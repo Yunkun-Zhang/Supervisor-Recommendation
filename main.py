@@ -1,5 +1,4 @@
-from models import MetaPath
-from process_data import load_data
+from utils.process_data import load_data
 import argparse
 
 metapaths = []

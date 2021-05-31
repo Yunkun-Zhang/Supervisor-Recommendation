@@ -5,7 +5,7 @@ import numpy as np
 from collections import defaultdict
 
 
-def load_authors(path='data/author_info.pickle'):
+def load_authors(path='../data/author_info.pickle'):
     with open(path, 'rb') as f:
         authors = pickle.load(f)
     return authors
@@ -31,7 +31,7 @@ def list_to_dict(lst):
     return authors"""
 
 
-def filter_paper(paper_dict):
+def filter_paper(paper_dict, ref=60, year=2000):
     # connect Acemap
     acemap = {'user': 'mobilenet',
               'passwd': 'mobilenet',
@@ -42,9 +42,9 @@ def filter_paper(paper_dict):
     db = pymysql.connect(**acemap)
     cursor = db.cursor()
     print('Query papers...')
-    query = 'SELECT am_analysis.am_paper_analysis.paper_id FROM am_analysis.am_paper_analysis INNER JOIN ' \
-            'am_paper.am_paper on am_analysis.am_paper_analysis.paper_id = am_paper.am_paper.paper_id ' \
-            'where reference_count > 60 and year > 2000'
+    query = f'SELECT am_analysis.am_paper_analysis.paper_id FROM am_analysis.am_paper_analysis INNER JOIN ' \
+            f'am_paper.am_paper on am_analysis.am_paper_analysis.paper_id = am_paper.am_paper.paper_id ' \
+            f'where reference_count > {ref} and year > {year}'
     cursor.execute(query)
     results = cursor.fetchall()
     new_paper_dict = dict()
@@ -249,7 +249,7 @@ def parent_field(field_dict, fields):
     return field_dict, fields, field_parents
 
 
-def load_data(path='data'):
+def load_data(path='../data'):
     data = dict()
     data['authors'] = load_authors(path + '/filtered_authors.pickle')
     data['papers'] = np.load(path + '/papers.npy')
@@ -272,23 +272,23 @@ if __name__ == '__main__':
     # authors and papers
     authors = load_authors()
     paper_dict, papers, author_paper = author_paper_edges(authors)
-    new_paper_dict, new_papers = filter_paper(paper_dict)
-    np.save('data/papers', new_papers)
+    new_paper_dict, new_papers = filter_paper(paper_dict, 60, 2010)
+    # np.save('data/papers', new_papers)
     authors, author_paper = filter_author_by_paper(authors, papers, author_paper, new_paper_dict)
-    with open('data/filtered_authors.pickle', 'wb') as f:
+    """with open('../data/filtered_authors.pickle', 'wb') as f:
         pickle.dump(authors, f)
-    np.save('data/author_paper', author_paper)
+    np.save('../data/author_paper', author_paper)
 
     # fields
-    authors = load_authors('data/filtered_authors.pickle')
+    authors = load_authors('../data/filtered_authors.pickle')
     author_field_level_dict = load_fields(authors, max_level=2)
     field_dict, fields, author_field = author_field_edges(authors, author_field_level_dict)
-    np.save('data/author_field', author_field)
+    np.save('../data/author_field', author_field)
     field_dict, fields, field_parent = parent_field(field_dict, fields)
-    np.save('data/fields', fields)
-    np.save('data/field_parent', field_parent)
-    fields = np.load('data/fields.npy')
-    papers = np.load('data/papers.npy')
+    np.save('../data/fields', fields)
+    np.save('../data/field_parent', field_parent)
+    fields = np.load('../data/fields.npy')
+    papers = np.load('../data/papers.npy')
     paper_dict = list_to_dict(papers)
     paper_field = paper_field_edges(paper_dict, fields)
-    np.save('data/paper_field', paper_field)
+    np.save('../data/paper_field', paper_field)"""
