@@ -8,6 +8,8 @@ from utils.meta_path import load_mp
 from utils.tools import EarlyStopping, IndexGenerator, parse_minibatch
 import argparse
 
+NUM_TRAIN_SAMPLE_PER_EPOCH = 100000
+NUM_VAL_SAMPLE_PER_EPOCH = 10000
 num_ntype = 3
 dropout_rate = 0.5
 lr = 0.005
@@ -40,16 +42,16 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
         in_dims.append(dim)
         features_list.append(torch.zeros((num_nodes, 10)).to(device))
 
-    train_pos_author_field = pos['train_pos_author_field']
-    train_pos_paper_field = pos['train_pos_paper_field']
-    val_pos_author_field = pos['val_pos_author_field']
-    val_pos_paper_field = pos['val_pos_paper_field']
+    train_pos_author_field_all = pos['train_pos_author_field']
+    train_pos_paper_field_all = pos['train_pos_paper_field']
+    val_pos_author_field_all = pos['val_pos_author_field']
+    val_pos_paper_field_all = pos['val_pos_paper_field']
     test_pos_author_field = pos['test_pos_author_field']
     test_pos_paper_field = pos['test_pos_paper_field']
-    train_neg_author_field = neg['train_pos_author_field']
-    train_neg_paper_field = neg['train_pos_paper_field']
-    val_neg_author_field = neg['val_pos_author_field']
-    val_neg_paper_field = neg['val_pos_paper_field']
+    train_neg_author_field_all = neg['train_pos_author_field']
+    train_neg_paper_field_all = neg['train_pos_paper_field']
+    val_neg_author_field_all = neg['val_pos_author_field']
+    val_neg_paper_field_all = neg['val_pos_paper_field']
     test_neg_author_field = neg['test_pos_author_field']
     test_neg_paper_field = neg['test_pos_paper_field']
 
@@ -68,6 +70,7 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
                                    save_path=f'checkpoint/checkpoint.pt')
 
     # adjust sample counts
+    '''
     num_af, num_pf = len(train_pos_author_field), len(train_pos_paper_field)
     if num_af < num_pf:
         train_pos_paper_field = np.random.choice(train_pos_paper_field, num_af, replace=False)
@@ -76,8 +79,11 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
         train_pos_author_field = np.random.choice(train_pos_author_field, num_pf, replace=False)
         train_neg_author_field = np.random.choice(train_neg_author_field, num_pf, replace=False)
     train_steps = min(num_pf, num_af)
-    train_pos_idx_generator = IndexGenerator(batch_size=batch_size, num_data=train_steps)
+    '''
+    # train_pos_idx_generator = IndexGenerator(batch_size=batch_size, num_data=train_steps)
+    train_pos_idx_generator = IndexGenerator(batch_size=batch_size, num_data=NUM_TRAIN_SAMPLE_PER_EPOCH)
 
+    '''
     num_af, num_pf = len(val_pos_author_field), len(val_pos_paper_field)
     if num_af < num_pf:
         val_pos_paper_field = np.random.choice(val_pos_paper_field, num_af, replace=False)
@@ -86,11 +92,24 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
         val_pos_author_field = np.random.choice(val_pos_author_field, num_pf, replace=False)
         val_neg_author_field = np.random.choice(val_neg_author_field, num_pf, replace=False)
     val_steps = min(num_af, num_pf)
-    val_idx_generator = IndexGenerator(batch_size=batch_size, num_data=val_steps, shuffle=False)
+    '''
+    # val_idx_generator = IndexGenerator(batch_size=batch_size, num_data=val_steps, shuffle=False)
+    val_idx_generator = IndexGenerator(batch_size=batch_size, num_data=NUM_VAL_SAMPLE_PER_EPOCH, shuffle=False)
+
 
     # run
     for epoch in range(epochs):
         # train
+        # prepare data for this epoch
+        train_pos_paper_field = np.random.choice(train_pos_paper_field_all, NUM_TRAIN_SAMPLE_PER_EPOCH, replace=False)
+        train_neg_paper_field = np.random.choice(train_neg_paper_field_all, NUM_TRAIN_SAMPLE_PER_EPOCH, replace=False)
+        train_pos_author_field = np.random.choice(train_pos_author_field_all, NUM_TRAIN_SAMPLE_PER_EPOCH, replace=False)
+        train_neg_author_field = np.random.choice(train_neg_author_field_all, NUM_TRAIN_SAMPLE_PER_EPOCH, replace=False)
+
+        val_pos_paper_field = np.random.choice(val_pos_paper_field_all, NUM_VAL_SAMPLE_PER_EPOCH, replace=False)
+        val_neg_paper_field = np.random.choice(val_neg_paper_field_all, NUM_VAL_SAMPLE_PER_EPOCH, replace=False)
+        val_pos_author_field = np.random.choice(val_pos_author_field_all, NUM_VAL_SAMPLE_PER_EPOCH, replace=False)
+        val_neg_author_field = np.random.choice(val_neg_author_field_all, NUM_VAL_SAMPLE_PER_EPOCH, replace=False)
         for itr in tqdm.tqdm(range(train_pos_idx_generator.num_iterations()),
                              desc=f'Epoch {epoch + 1:>3}/{epochs}'):
             train_pos_idx_batch = train_pos_idx_generator.next()
