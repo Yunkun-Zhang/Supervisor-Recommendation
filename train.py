@@ -29,7 +29,7 @@ expected_metapaths = [
 
 
 def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patience, neighbor_samples):
-    adjlists, edge_metapath_indices_list, type_mask, pos, neg = load_mp()
+    adjlists, edge_metapath_indices_list, type_mask, pos, neg = load_mp('data/preprocessed')
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     features_list = []
     in_dims = []

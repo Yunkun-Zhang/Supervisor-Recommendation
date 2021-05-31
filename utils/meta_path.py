@@ -15,6 +15,12 @@ from process_data import *
 import math
 from split_and_sample import *
 
+expected_metapaths = [
+        [(0, 1, 0), (0, 2, 0), (0, 2, 1, 2, 0)],
+        [(1, 0, 1), (1, 2, 1), (1, 2, 0, 2, 1)],
+        [(2, 2, 2)]
+    ]
+
 
 def find_meta_path(data):
     num_author, num_paper, num_field = len(data['authors']), len(data['papers']), len(data['fields'])
@@ -25,6 +31,7 @@ def find_meta_path(data):
     type_mask[:num_paper] = 0  # 0 for paper
     type_mask[num_paper:num_paper + num_author] = 1  # 1 for author
     type_mask[num_paper + num_author:] = 2  # 2 for field
+    np.save('../data/preprocessed/type_mask', type_mask)
 
     # dataset split
     author_field = defaultdict(list)
@@ -93,11 +100,6 @@ def find_meta_path(data):
                                                                              num_paper)
 
     # save metapaths
-    expected_metapaths = [
-        [(0, 1, 0), (0, 2, 0), (0, 2, 1, 2, 0)],
-        [(1, 0, 1), (1, 2, 1), (1, 2, 0, 2, 1)],
-        [(2, 2, 2)]
-    ]
     metapath_indices_mapping = {(0, 1, 0): p_a_p,
                                 (0, 2, 0): p_f_p,
                                 (0, 2, 1, 2, 0): p_f_a_f_p,
@@ -203,7 +205,7 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author,
     a_f_p_f_a = []
     # first obtain f_p_f
     f_p_f = []
-    for p, f_list in tqdm.tqdm(paper_field.items(), desc="Meta-path f-a-f"):
+    for p, f_list in tqdm.tqdm(paper_field.items(), desc="Metapath f-a-f"):
         f_p_f.extend([(f1, p, f2) for f1 in f_list for f2 in f_list])
     # f_p_f = np.array(f_p_f)
     for f1, p, f2 in f_p_f:
@@ -224,10 +226,38 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author,
     return p_a_p, p_f_p, a_p_a, a_f_a, f_f_f, p_f_a_f_p, a_f_p_f_a
 
 
-def load_mp():
-    pass
+def load_mp(path='../data/preprocessed'):
+    adj_lists, idx_lists = [], []
+    for mode in range(3):
+        adj_list, idx_list = [], []
+        for metapath in expected_metapaths[mode]:
+            with open(path + f'/{mode}/' + '-'.join(map(str, metapath)) + '.adjlist', 'r') as f:
+                adj_list.append([line.strip() for line in f])
+            with open(path + f'/{mode}/' + '-'.join(map(str, metapath)) + '_idx.pickle', 'rb') as f:
+                idx_list.append(pickle.load(f))
+        adj_lists.append(adj_list)
+        idx_lists.append(idx_list)
+    type_mask = np.load(path + '/type_mask.npy')
+    pos = np.load(path + '/train_val_test_pos_author_field.npz')
+    pos.update(np.load(path + '/train_val_test_pos_paper_field.npz'))
+    neg = np.load(path + '/train_val_test_neg_author_field.npz')
+    neg.update(np.load(path + '/train_val_test_neg_paper_field.npz'))
+    return adj_lists, idx_lists, type_mask, pos, neg
 
 
 if __name__ == '__main__':
-    data = load_data()
-    find_meta_path(data)
+    with open('../data/filtered_authors.pickle', 'rb') as f:
+        authors = pickle.load(f)
+    print(len(authors), 'authors')
+    papers = np.load('../data/papers.npy')
+    print(len(papers), 'papers')
+    ap = np.load('../data/author_paper.npy')
+    print(len(ap), 'author-paper edges')
+    fields = np.load('../data/fields.npy')
+    print(len(fields), 'fields')
+    af = np.load('../data/author_field.npy')
+    print(len(af), 'author-field edges')
+    ff = np.load('../data/field_parent.npy')
+    print(len(ff), 'field-parent edges')
+    # pf = np.load('../data/paper_field.npy')
+    # print(len(pf), 'paper-field edges')
