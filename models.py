@@ -7,13 +7,32 @@ from dgl.nn.pytorch import edge_softmax
 
 
 class MetaPath(nn.Module):
-    def __init__(self, etypes, out_dim, num_heads, attn_drop=0.5, alpha=0.01, use_minibatch=False):
+    def __init__(self, etypes, out_dim, num_heads, rnn_type='gru', r_vec=None,
+                 attn_drop=0.5, alpha=0.01, use_minibatch=False):
         super(MetaPath, self).__init__()
         self.etypes = etypes
         self.out_dim = out_dim
         self.num_heads = num_heads
+        self.rnn_type = rnn_type
+        self.r_vec = r_vec
         self.use_minibatch = use_minibatch
-        self.rnn = nn.LSTM(out_dim, num_heads * out_dim)
+
+        # rnn-like metapath instance aggregator
+        # consider multiple attention heads
+        if rnn_type == 'gru':
+            self.rnn = nn.GRU(out_dim, num_heads * out_dim)
+        elif rnn_type == 'lstm':
+            self.rnn = nn.LSTM(out_dim, num_heads * out_dim)
+        elif rnn_type == 'bi-gru':
+            self.rnn = nn.GRU(out_dim, num_heads * out_dim // 2, bidirectional=True)
+        elif rnn_type == 'bi-lstm':
+            self.rnn = nn.LSTM(out_dim, num_heads * out_dim // 2, bidirectional=True)
+        elif rnn_type == 'linear':
+            self.rnn = nn.Linear(out_dim, num_heads * out_dim)
+        elif rnn_type == 'max-pooling':
+            self.rnn = nn.Linear(out_dim, num_heads * out_dim)
+        elif rnn_type == 'neighbor-linear':
+            self.rnn = nn.Linear(out_dim, num_heads * out_dim)
 
         self.attn1 = nn.Linear(out_dim, num_heads, bias=False)
         self.attn2 = nn.Parameter(torch.empty(size=(1, num_heads, out_dim)))
@@ -45,7 +64,79 @@ class MetaPath(nn.Module):
 
         edata = F.embedding(edge_metapath_indices, features)
 
-        _, (hidden, _) = self.rnn(edata.permute(1, 0, 2))
+        # apply rnn to metapath-based feature sequence
+        if self.rnn_type == 'gru':
+            _, hidden = self.rnn(edata.permute(1, 0, 2))
+        elif self.rnn_type == 'lstm':
+            _, (hidden, _) = self.rnn(edata.permute(1, 0, 2))
+        elif self.rnn_type == 'bi-gru':
+            _, hidden = self.rnn(edata.permute(1, 0, 2))
+            hidden = hidden.permute(1, 0, 2).reshape(-1, self.out_dim, self.num_heads).permute(0, 2, 1).reshape(
+                -1, self.num_heads * self.out_dim).unsqueeze(dim=0)
+        elif self.rnn_type == 'bi-lstm':
+            _, (hidden, _) = self.rnn(edata.permute(1, 0, 2))
+            hidden = hidden.permute(1, 0, 2).reshape(-1, self.out_dim, self.num_heads).permute(0, 2, 1).reshape(
+                -1, self.num_heads * self.out_dim).unsqueeze(dim=0)
+        elif self.rnn_type == 'average':
+            hidden = torch.mean(edata, dim=1)
+            hidden = torch.cat([hidden] * self.num_heads, dim=1)
+            hidden = hidden.unsqueeze(dim=0)
+        elif self.rnn_type == 'linear':
+            hidden = self.rnn(torch.mean(edata, dim=1))
+            hidden = hidden.unsqueeze(dim=0)
+        elif self.rnn_type == 'max-pooling':
+            hidden, _ = torch.max(self.rnn(edata), dim=1)
+            hidden = hidden.unsqueeze(dim=0)
+        elif self.rnn_type == 'TransE0' or self.rnn_type == 'TransE1':
+            r_vec = self.r_vec
+            if self.rnn_type == 'TransE0':
+                r_vec = torch.stack((r_vec, -r_vec), dim=1)
+                r_vec = r_vec.reshape(self.r_vec.shape[0] * 2, self.r_vec.shape[1])  # etypes x out_dim
+            edata = F.normalize(edata, p=2, dim=2)
+            for i in range(edata.shape[1] - 1):
+                # consider None edge (symmetric relation)
+                temp_etypes = [etype for etype in self.etypes[i:] if etype is not None]
+                edata[:, i] = edata[:, i] + r_vec[temp_etypes].sum(dim=0)
+            hidden = torch.mean(edata, dim=1)
+            hidden = torch.cat([hidden] * self.num_heads, dim=1)
+            hidden = hidden.unsqueeze(dim=0)
+        elif self.rnn_type == 'RotatE0' or self.rnn_type == 'RotatE1':
+            r_vec = F.normalize(self.r_vec, p=2, dim=2)
+            if self.rnn_type == 'RotatE0':
+                r_vec = torch.stack((r_vec, r_vec), dim=1)
+                r_vec[:, 1, :, 1] = -r_vec[:, 1, :, 1]
+                r_vec = r_vec.reshape(self.r_vec.shape[0] * 2, self.r_vec.shape[1], 2)  # etypes x out_dim/2 x 2
+            edata = edata.reshape(edata.shape[0], edata.shape[1], edata.shape[2] // 2, 2)
+            final_r_vec = torch.zeros([edata.shape[1], self.out_dim // 2, 2], device=edata.device)
+            final_r_vec[-1, :, 0] = 1
+            for i in range(final_r_vec.shape[0] - 2, -1, -1):
+                # consider None edge (symmetric relation)
+                if self.etypes[i] is not None:
+                    final_r_vec[i, :, 0] = final_r_vec[i + 1, :, 0].clone() * r_vec[self.etypes[i], :, 0] - \
+                                           final_r_vec[i + 1, :, 1].clone() * r_vec[self.etypes[i], :, 1]
+                    final_r_vec[i, :, 1] = final_r_vec[i + 1, :, 0].clone() * r_vec[self.etypes[i], :, 1] + \
+                                           final_r_vec[i + 1, :, 1].clone() * r_vec[self.etypes[i], :, 0]
+                else:
+                    final_r_vec[i, :, 0] = final_r_vec[i + 1, :, 0].clone()
+                    final_r_vec[i, :, 1] = final_r_vec[i + 1, :, 1].clone()
+            for i in range(edata.shape[1] - 1):
+                temp1 = edata[:, i, :, 0].clone() * final_r_vec[i, :, 0] - \
+                        edata[:, i, :, 1].clone() * final_r_vec[i, :, 1]
+                temp2 = edata[:, i, :, 0].clone() * final_r_vec[i, :, 1] + \
+                        edata[:, i, :, 1].clone() * final_r_vec[i, :, 0]
+                edata[:, i, :, 0] = temp1
+                edata[:, i, :, 1] = temp2
+            edata = edata.reshape(edata.shape[0], edata.shape[1], -1)
+            hidden = torch.mean(edata, dim=1)
+            hidden = torch.cat([hidden] * self.num_heads, dim=1)
+            hidden = hidden.unsqueeze(dim=0)
+        elif self.rnn_type == 'neighbor':
+            hidden = edata[:, 0]
+            hidden = torch.cat([hidden] * self.num_heads, dim=1)
+            hidden = hidden.unsqueeze(dim=0)
+        elif self.rnn_type == 'neighbor-linear':
+            hidden = self.rnn(edata[:, 0])
+            hidden = hidden.unsqueeze(dim=0)
 
         eft = hidden.permute(1, 0, 2).view(-1, self.num_heads, self.out_dim)  # E x num_heads x out_dim
 
@@ -71,7 +162,7 @@ class MetaPath(nn.Module):
 
 class MAGNN(nn.Module):
     def __init__(self, num_metapaths, etypes_list, out_dim, num_heads, attn_vec_dim,
-                 attn_drop=0.5, use_minibatch=False):
+                 rnn_type='gru', r_vec=None, attn_drop=0.5, use_minibatch=False):
         super(MAGNN, self).__init__()
         self.out_dim = out_dim
         self.num_heads = num_heads
@@ -82,6 +173,8 @@ class MAGNN(nn.Module):
             self.metapath_layers.append(MetaPath(etypes_list[i],
                                                  out_dim,
                                                  num_heads,
+                                                 rnn_type,
+                                                 r_vec,
                                                  attn_drop=attn_drop,
                                                  use_minibatch=use_minibatch))
 
@@ -130,25 +223,42 @@ class MAGNN(nn.Module):
 
 
 class LPLayer(nn.Module):
-    def __init__(self, num_metapaths_list, etypes_lists, in_dim, out_dim,
-                 num_heads, attn_vec_dim, attn_drop=0.5):
+    def __init__(self, num_metapaths_list, num_edge_type, etypes_lists, in_dim, out_dim,
+                 num_heads, attn_vec_dim, rnn_type='gru', attn_drop=0.5):
         super(LPLayer, self).__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.num_heads = num_heads
 
-        # 0 for paper, 1 for author
-        self.paper_layer = MAGNN(num_metapaths_list[0], etypes_lists[0], in_dim,
-                                 num_heads, attn_vec_dim, attn_drop, True)
-        self.author_layer = MAGNN(num_metapaths_list[1], etypes_lists[1], in_dim,
-                                  num_heads, attn_vec_dim, attn_drop, True)
+        # etype-specific parameters
+        r_vec = None
+        if rnn_type == 'TransE0':
+            r_vec = nn.Parameter(torch.empty(size=(num_edge_type // 2, in_dim)))
+        elif rnn_type == 'TransE1':
+            r_vec = nn.Parameter(torch.empty(size=(num_edge_type, in_dim)))
+        elif rnn_type == 'RotatE0':
+            r_vec = nn.Parameter(torch.empty(size=(num_edge_type // 2, in_dim // 2, 2)))
+        elif rnn_type == 'RotatE1':
+            r_vec = nn.Parameter(torch.empty(size=(num_edge_type, in_dim // 2, 2)))
+        if r_vec is not None:
+            nn.init.xavier_normal_(r_vec.data, gain=1.414)
 
-        # note that the acutal input dimension should consider the number of heads
+        # 0 for paper, 1 for author, 2 for field
+        self.paper_layer = MAGNN(num_metapaths_list[0], etypes_lists[0], in_dim,
+                                 num_heads, attn_vec_dim, rnn_type, r_vec, attn_drop, True)
+        self.author_layer = MAGNN(num_metapaths_list[1], etypes_lists[1], in_dim,
+                                  num_heads, attn_vec_dim, rnn_type, r_vec, attn_drop, True)
+        self.field_layer = MAGNN(num_metapaths_list[2], etypes_lists[2], in_dim,
+                                 num_heads, attn_vec_dim, rnn_type, r_vec, attn_drop, True)
+
+        # note that the actual input dimension should consider the number of heads
         # as multiple head outputs are concatenated together
         self.fc_paper = nn.Linear(in_dim * num_heads, out_dim, bias=True)
         self.fc_author = nn.Linear(in_dim * num_heads, out_dim, bias=True)
+        self.fc_field = nn.Linear(in_dim * num_heads, out_dim, bias=True)
         nn.init.xavier_normal_(self.fc_paper.weight, gain=1.414)
         nn.init.xavier_normal_(self.fc_author.weight, gain=1.414)
+        nn.init.xavier_normal_(self.fc_field.weight, gain=1.414)
 
     def forward(self, inputs):
         g_lists, features, type_mask, edge_metapath_indices_lists, target_idx_lists = inputs
@@ -158,15 +268,19 @@ class LPLayer(nn.Module):
             (g_lists[0], features, type_mask, edge_metapath_indices_lists[0], target_idx_lists[0]))
         h_author = self.author_layer(
             (g_lists[1], features, type_mask, edge_metapath_indices_lists[1], target_idx_lists[1]))
+        h_field = self.field_layer(
+            (g_lists[2], features, type_mask, edge_metapath_indices_lists[2], target_idx_lists[2]))
 
         logits_paper = self.fc_paper(h_paper)
         logits_author = self.fc_author(h_author)
+        logits_field = self.fc_field(h_field)
+
         return [logits_paper, logits_author], [h_paper, h_author]
 
 
 class LP(nn.Module):
     def __init__(self, num_metapaths_list, etypes_lists, feats_dim_list, hidden_dim,
-                 out_dim, num_heads, attn_vec_dim, dropout_rate=0.5):
+                 out_dim, num_heads, attn_vec_dim, rnn_type='gru', dropout_rate=0.5):
         super(LP, self).__init__()
         self.hidden_dim = hidden_dim
 
@@ -183,7 +297,7 @@ class LP(nn.Module):
 
         # MAGNN_lp layers
         self.layer1 = LPLayer(num_metapaths_list, etypes_lists, hidden_dim, out_dim,
-                              num_heads, attn_vec_dim, attn_drop=dropout_rate)
+                              num_heads, attn_vec_dim, rnn_type, attn_drop=dropout_rate)
 
     def forward(self, inputs):
         g_lists, features_list, type_mask, edge_metapath_indices_lists, target_idx_lists = inputs

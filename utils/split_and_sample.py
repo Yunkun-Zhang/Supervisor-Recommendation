@@ -23,6 +23,7 @@ def find_ap_path(author_field, field_paper):
     return a_f_p, ap_dct
 '''
 
+
 def get_train_val_test_split(target, val_split, test_split):
     train_target, mid_target = train_test_split(target, test_size=val_split + test_split)
     val_target, test_target = train_test_split(mid_target, test_size=test_split / (val_split + test_split))
@@ -38,4 +39,3 @@ def get_neg_samples(target, dim_1, dim_2):
     neg_set = full - set(map(tuple, target.tolist()))
 
     return list(map(list, list(neg_set)))
-
