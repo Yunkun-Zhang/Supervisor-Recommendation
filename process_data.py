@@ -144,7 +144,7 @@ def author_paper_edges(authors):
     author_paper = []
     count = 0
 
-    for i, author in enumerate(authors):
+    for i, author in enumerate(tqdm.tqdm(authors, desc='Adding papers')):
         for paper_id in author['paper_id']:
             if paper_id not in paper_dict:
                 paper_dict[paper_id] = count
@@ -268,107 +268,20 @@ def load_data(path='data'):
     return data
 
 
-def process(data):
-    num_author, num_paper, num_field = len(data['authors']), len(data['papers']), len(data['fields'])
-    dim = num_author + num_paper + num_field
-
-    # create type mask
-    type_mask = np.zeros(dim, dtype=int)
-    type_mask[:num_paper] = 0  # 0 for paper
-    type_mask[num_paper:num_paper + num_author] = 1  # 1 for author
-    type_mask[num_paper + num_author:] = 2  # 2 for field
-
-    # create dicts for metapath
-    author_paper = defaultdict(list)
-    paper_author = defaultdict(list)
-    for a, p in data['author_paper']:
-        author_paper[a].append(p)
-        paper_author[p].append(a)
-    author_field = defaultdict(list)
-    field_author = defaultdict(list)
-    for a, f in data['author_field']:
-        author_field[a].append(f)
-        field_author[f].append(a)
-    child_parent_field = defaultdict(list)
-    parent_child_field = defaultdict(list)
-    for f1, f2 in data['field_parent']:
-        field_field[f1].append(f2)
-        field_field[f2].append(f1)
-
-    # create metapaths
-    p_a_p = []
-    for a, p_list in tqdm.tqdm(author_paper.items(), desc='Meta-path p-a-p'):
-        p_a_p.extend([(p1, a, p2) for p1 in p_list for p2 in p_list])
-    p_a_p = np.array(p_a_p)
-    p_a_p[:, 1] += num_paper
-
-    """f_f_f = []
-    for f, f_list in tqdm.tqdm(field_field.items(), desc='Meta-path f-f-f'):
-        f_f_f.extend([(f1, f, f2) for f1 in f_list for f2 in f_list])
-    f_f_f = np.array(f_f_f)
-    f_f_f += num_paper + num_author"""
-
-    a_f_a = []
-    for f, a_list in tqdm.tqdm(field_author.items(), desc='Meta-path a-f-a'):
-        a_f_a.extend([(a1, f, a2) for a1 in a_list for a2 in a_list])
-    a_f_a = np.array(a_f_a)
-    a_f_a[:, 1] += num_paper
-
-    # save metapaths
-    expected_metapaths = [
-        [(0, 1, 0)],
-        [(1, 2, 1)]
-    ]
-    metapath_indices_mapping = {(0, 1, 0): p_a_p, (1, 2, 1): a_f_a}
-
-    target_idx_lists = [np.arange(num_paper), np.arange(num_author)]
-    offset_list = [0, num_paper]
-    for i, metapaths in enumerate(expected_metapaths):
-        for metapath in metapaths:
-            edge_metapath_idx_array = metapath_indices_mapping[metapath]
-
-            with open(f'data/preprocessed/{i}/' + '-'.join(map(str, metapath)) + '_idx.pickle', 'wb') as out_file:
-                target_metapaths_mapping = {}
-                left = 0
-                right = 0
-                for target_idx in tqdm.tqdm(target_idx_lists[i], desc=f'Saving {metapath}_idx'):
-                    while right < len(edge_metapath_idx_array) and edge_metapath_idx_array[right, 0] == target_idx + \
-                            offset_list[i]:
-                        right += 1
-                    target_metapaths_mapping[target_idx] = edge_metapath_idx_array[left:right, ::-1]
-                    left = right
-                pickle.dump(target_metapaths_mapping, out_file)
-
-            with open(f'data/preprocessed/{i}/' + '-'.join(map(str, metapath)) + '.adjlist', 'w') as out_file:
-                left = 0
-                right = 0
-                for target_idx in tqdm.tqdm(target_idx_lists[i], desc=f'Saving {metapath}.adjlist'):
-                    while right < len(edge_metapath_idx_array) and edge_metapath_idx_array[right, 0] == target_idx + \
-                            offset_list[i]:
-                        right += 1
-                    neighbors = edge_metapath_idx_array[left:right, -1] - offset_list[i]
-                    neighbors = list(map(str, neighbors))
-                    if len(neighbors) > 0:
-                        out_file.write('{} '.format(target_idx) + ' '.join(neighbors) + '\n')
-                    else:
-                        out_file.write('{}\n'.format(target_idx))
-                    left = right
-
-
 if __name__ == '__main__':
     # authors and papers
-    """authors = load_authors()
+    authors = load_authors()
     paper_dict, papers, author_paper = author_paper_edges(authors)
     new_paper_dict, new_papers = filter_paper(paper_dict)
     np.save('data/papers', new_papers)
     authors, author_paper = filter_author_by_paper(authors, papers, author_paper, new_paper_dict)
     with open('data/filtered_authors.pickle', 'wb') as f:
         pickle.dump(authors, f)
-    np.save('data/author_paper', author_paper)"""
+    np.save('data/author_paper', author_paper)
 
     # fields
-    """authors = load_authors('data/filtered_authors.pickle')
-    author_field_level_dict = load_fields(authors)
+    authors = load_authors('data/filtered_authors.pickle')
+    author_field_level_dict = load_fields(authors, max_level=2)
     field_dict, fields, author_field = author_field_edges(authors, author_field_level_dict)
     np.save('data/author_field', author_field)
     field_dict, fields, field_parent = parent_field(field_dict, fields)
@@ -378,4 +291,4 @@ if __name__ == '__main__':
     papers = np.load('data/papers.npy')
     paper_dict = list_to_dict(papers)
     paper_field = paper_field_edges(paper_dict, fields)
-    np.save('data/paper_field', paper_field)"""
+    np.save('data/paper_field', paper_field)
