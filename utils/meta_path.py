@@ -27,8 +27,15 @@ def find_meta_path(data):
     type_mask[num_paper + num_author:] = 2  # 2 for field
 
     # dataset split
-    neg_af = get_neg_samples(data['author_field'], num_author, num_field)
-    neg_pf = get_neg_samples(data['paper_field'], num_paper, num_field)
+    author_field = defaultdict(list)
+    for a, f in data['author_field']:
+        author_field[a].append(f)
+    paper_field = defaultdict(list)
+    for p, f in data['paper_field']:
+        paper_field[p].append(f)
+
+    neg_af = get_neg_samples(author_field, num_field, 10)
+    neg_pf = get_neg_samples(paper_field, num_field, 10)
     af_pos_train, af_pos_val, af_pos_test = get_train_val_test_split(data['author_field'], 0.1, 0.1)
     pf_pos_train, pf_pos_val, pf_pos_test = get_train_val_test_split(data['paper_field'], 0.1, 0.1)
     af_neg_train, af_neg_val, af_neg_test = get_train_val_test_split(neg_af, 0.1, 0.1)

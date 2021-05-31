@@ -1,4 +1,6 @@
 from sklearn.model_selection import train_test_split
+from tqdm import tqdm
+import numpy as np
 '''
 def find_ap_path(author_field, field_paper):
     """
@@ -31,11 +33,12 @@ def get_train_val_test_split(target, val_split, test_split):
     return train_target, val_target, test_target
 
 
-def get_neg_samples(target, dim_1, dim_2):
-    full = set()
-    for i in range(dim_1):
-        for j in range(dim_2):
-            full.add((i, j))
-    neg_set = full - set(map(tuple, target.tolist()))
+def get_neg_samples(pos_dct, dim_2, sample_per_node):
+    neg_samples = []
+    for key, value in tqdm(pos_dct.items(), desc="Negative sampling"):
+        candidate = np.setdiff1d(np.arange(dim_2), value)
+        neg_target = np.random.choice(candidate, sample_per_node)
+        for target in neg_target:
+            neg_samples.append([key, target])
+    return neg_samples
 
-    return list(map(list, list(neg_set)))
