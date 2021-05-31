@@ -30,12 +30,4 @@ def get_train_val_test_split(target, val_split, test_split):
     return train_target, val_target, test_target
 
 
-def get_neg_samples(target, dim_1, dim_2):
-    full = set()
-    for i in range(dim_1):
-        for j in range(dim_2):
-            full.add((i, j))
-    neg_set = full - set(map(tuple, target.tolist()))
-
-    return list(map(list, list(neg_set)))
 
