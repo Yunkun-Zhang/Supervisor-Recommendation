@@ -246,18 +246,5 @@ def load_mp(path='../data/preprocessed'):
 
 
 if __name__ == '__main__':
-    with open('../data/filtered_authors.pickle', 'rb') as f:
-        authors = pickle.load(f)
-    print(len(authors), 'authors')
-    papers = np.load('../data/papers.npy')
-    print(len(papers), 'papers')
-    ap = np.load('../data/author_paper.npy')
-    print(len(ap), 'author-paper edges')
-    fields = np.load('../data/fields.npy')
-    print(len(fields), 'fields')
-    af = np.load('../data/author_field.npy')
-    print(len(af), 'author-field edges')
-    ff = np.load('../data/field_parent.npy')
-    print(len(ff), 'field-parent edges')
-    # pf = np.load('../data/paper_field.npy')
-    # print(len(pf), 'paper-field edges')
+    data = load_data()
+    find_meta_path(data)
