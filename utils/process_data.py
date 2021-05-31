@@ -272,16 +272,16 @@ if __name__ == '__main__':
     # authors and papers
     authors = load_authors()
     paper_dict, papers, author_paper = author_paper_edges(authors)
-    new_paper_dict, new_papers = filter_paper(paper_dict, 60, 2010)
-    # np.save('data/papers', new_papers)
+    new_paper_dict, new_papers = filter_paper(paper_dict, 70, 2015)
+    np.save('../data/papers', new_papers)
     authors, author_paper = filter_author_by_paper(authors, papers, author_paper, new_paper_dict)
-    """with open('../data/filtered_authors.pickle', 'wb') as f:
+    with open('../data/filtered_authors.pickle', 'wb') as f:
         pickle.dump(authors, f)
     np.save('../data/author_paper', author_paper)
 
     # fields
     authors = load_authors('../data/filtered_authors.pickle')
-    author_field_level_dict = load_fields(authors, max_level=2)
+    author_field_level_dict = load_fields(authors, max_level=3)
     field_dict, fields, author_field = author_field_edges(authors, author_field_level_dict)
     np.save('../data/author_field', author_field)
     field_dict, fields, field_parent = parent_field(field_dict, fields)
@@ -291,4 +291,4 @@ if __name__ == '__main__':
     papers = np.load('../data/papers.npy')
     paper_dict = list_to_dict(papers)
     paper_field = paper_field_edges(paper_dict, fields)
-    np.save('../data/paper_field', paper_field)"""
+    np.save('../data/paper_field', paper_field)

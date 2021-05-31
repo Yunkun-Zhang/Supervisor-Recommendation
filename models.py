@@ -275,11 +275,11 @@ class LPLayer(nn.Module):
         logits_author = self.fc_author(h_author)
         logits_field = self.fc_field(h_field)
 
-        return [logits_paper, logits_author], [h_paper, h_author]
+        return [logits_paper, logits_author, logits_field], [h_paper, h_author, h_field]
 
 
 class LP(nn.Module):
-    def __init__(self, num_metapaths_list, etypes_lists, feats_dim_list, hidden_dim,
+    def __init__(self, num_metapaths_list, num_edge_type, etypes_lists, feats_dim_list, hidden_dim,
                  out_dim, num_heads, attn_vec_dim, rnn_type='gru', dropout_rate=0.5):
         super(LP, self).__init__()
         self.hidden_dim = hidden_dim
@@ -296,7 +296,7 @@ class LP(nn.Module):
             nn.init.xavier_normal_(fc.weight, gain=1.414)
 
         # MAGNN_lp layers
-        self.layer1 = LPLayer(num_metapaths_list, etypes_lists, hidden_dim, out_dim,
+        self.layer1 = LPLayer(num_metapaths_list, num_edge_type, etypes_lists, hidden_dim, out_dim,
                               num_heads, attn_vec_dim, rnn_type, attn_drop=dropout_rate)
 
     def forward(self, inputs):
@@ -310,7 +310,7 @@ class LP(nn.Module):
         transformed_features = self.feat_drop(transformed_features)
 
         # hidden layers
-        [logits_paper, logits_author], [h_paper, h_author] = self.layer1(
+        [logits_paper, logits_author, logits_field], [h_paper, h_author, h_field] = self.layer1(
             (g_lists, transformed_features, type_mask, edge_metapath_indices_lists, target_idx_lists))
 
-        return [logits_paper, logits_author], [h_paper, h_author]
+        return [logits_paper, logits_author, logits_field], [h_paper, h_author, h_field]

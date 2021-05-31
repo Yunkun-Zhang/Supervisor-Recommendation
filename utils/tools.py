@@ -81,7 +81,8 @@ class IndexGenerator:
         self.iter_counter = 0
 
 
-def parse_adjlist(adjlist, edge_metapath_indices, samples=None, exclude=None, offset=None, mode=None):
+def parse_adjlist(adjlist, edge_metapath_indices, samples=None, exclude=None,
+                  offset1=None, offset2=None, mode=None, use_mask=0):
     edges = []
     nodes = set()
     result_indices = []
@@ -92,12 +93,9 @@ def parse_adjlist(adjlist, edge_metapath_indices, samples=None, exclude=None, of
             # sampling neighbors
             if samples is None:
                 if exclude is not None:
-                    if mode == 0:
-                        mask = [False if [u1, a1 - offset] in exclude or [u2, a2 - offset] in exclude else True
-                                for u1, a1, u2, a2 in indices[:, [0, 1, -1, -2]]]
-                    else:
-                        mask = [False if [u1, a1 - offset] in exclude or [u2, a2 - offset] in exclude else True
-                                for a1, u1, a2, u2 in indices[:, [0, 1, -1, -2]]]
+                    position = [use_mask - 1, use_mask, -use_mask, -use_mask - 1]
+                    mask = [False if [ap1 - offset1, f1 - offset2] in exclude or [ap2 - offset1, f2 - offset2]
+                            in exclude else True for ap1, f1, ap2, f2 in indices[:, position]]
                     neighbors = np.array(row_parsed[1:])[mask]
                     result_indices.append(indices[mask])
                 else:
@@ -114,12 +112,9 @@ def parse_adjlist(adjlist, edge_metapath_indices, samples=None, exclude=None, of
                 samples = min(samples, len(row_parsed) - 1)
                 sampled_idx = np.sort(np.random.choice(len(row_parsed) - 1, samples, replace=False, p=p))
                 if exclude is not None:
-                    if mode == 0:
-                        mask = [False if [u1, a1 - offset] in exclude or [u2, a2 - offset] in exclude else True
-                                for u1, a1, u2, a2 in indices[sampled_idx][:, [0, 1, -1, -2]]]
-                    else:
-                        mask = [False if [u1, a1 - offset] in exclude or [u2, a2 - offset] in exclude else True
-                                for a1, u1, a2, u2 in indices[sampled_idx][:, [0, 1, -1, -2]]]
+                    position = [use_mask - 1, use_mask, -use_mask, -use_mask - 1]
+                    mask = [False if [ap1 - offset1, f1 - offset2] in exclude or [ap2 - offset1, f2 - offset2]
+                            in exclude else True for ap1, f1, ap2, f2 in indices[sampled_idx][:, position]]
                     neighbors = np.array([row_parsed[i + 1] for i in sampled_idx])[mask]
                     result_indices.append(indices[sampled_idx][mask])
                 else:
@@ -146,14 +141,14 @@ def parse_minibatch(adjlists, edge_metapath_indices_list, batch, device, samples
     idx_batch_mapped_lists = [[], [], []]
     for mode, (adjlists, edge_metapath_indices_list) in enumerate(zip(adjlists, edge_metapath_indices_list)):
         for adjlist, indices, use_mask in zip(adjlists, edge_metapath_indices_list, use_masks[mode]):
-            if use_mask:
+            if use_mask > 0:
                 edges, result_indices, num_nodes, mapping = parse_adjlist(
                     [adjlist[row[mode]] for row in batch], [indices[row[mode]] for row in batch],
-                    samples, batch, offset, mode)
+                    samples, batch, offset[0], offset[1], mode, use_mask)
             else:
                 edges, result_indices, num_nodes, mapping = parse_adjlist(
                     [adjlist[row[mode]] for row in batch], [indices[row[mode]] for row in batch],
-                    samples, offset=offset, mode=mode)
+                    samples, offset1=offset[0], offset2=offset[1], mode=mode)
 
             g = dgl.DGLGraph(multigraph=True)
             g.add_nodes(num_nodes)
