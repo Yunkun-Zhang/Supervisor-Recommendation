@@ -135,20 +135,30 @@ def parse_adjlist(adjlist, edge_metapath_indices, samples=None, exclude=None,
     return edges, result_indices, len(nodes), mapping
 
 
-def parse_minibatch(adjlists_all, edge_metapath_indices_list, batch, device, samples=None, use_masks=None, offset=None):
+def parse_minibatch(adjlists_all, edge_metapath_indices_list, batch_af, batch_pf, device, samples=None, use_masks=None, offset=None):
+    """
+    We have two batches this time: one for author-field, one for paper-field
+    AF: mode 1, mode 2
+    PF: mode 0, mode 2
+
+    return: note that the number of A-F-P is bs, 2bs, bs
+    """
     g_lists = [[], [], []]
     result_indices_lists = [[], [], []]
     idx_batch_mapped_lists = [[], [], []]
+
+    # AF part, only take 1 and 2
     for mode, (adjlists, edge_metapath_indices_list) in enumerate(zip(adjlists_all, edge_metapath_indices_list)):
-        print(len(adjlists), len(adjlists[0]))
+        if mode == 0:
+            continue
         for adjlist, indices, use_mask in zip(adjlists, edge_metapath_indices_list, use_masks[mode]):
             if use_mask > 0:
                 edges, result_indices, num_nodes, mapping = parse_adjlist(
-                    [adjlist[row[mode]] for row in batch], [indices[row[mode]] for row in batch],
-                    samples, batch, offset[0], offset[1], mode, use_mask)
+                    [adjlist[row[mode//2]] for row in batch_af], [indices[row[mode//2]] for row in batch_af],
+                    samples, batch_af, offset[0], offset[1], mode, use_mask)
             else:
                 edges, result_indices, num_nodes, mapping = parse_adjlist(
-                    [adjlist[row[mode]] for row in batch], [indices[row[mode]] for row in batch],
+                    [adjlist[row[mode//2]] for row in batch_af], [indices[row[mode//2]] for row in batch_af],
                     samples, offset1=offset[0], offset2=offset[1], mode=mode)
 
             g = dgl.DGLGraph(multigraph=True)
@@ -161,6 +171,33 @@ def parse_minibatch(adjlists_all, edge_metapath_indices_list, batch, device, sam
                 result_indices = torch.LongTensor(result_indices).to(device)
             g_lists[mode].append(g)
             result_indices_lists[mode].append(result_indices)
-            idx_batch_mapped_lists[mode].append(np.array([mapping[row[mode]] for row in batch]))
+            idx_batch_mapped_lists[mode].append(np.array([mapping[row[mode]] for row in batch_af]))
+
+        # PF part, only take 0 and 2
+        for mode, (adjlists, edge_metapath_indices_list) in enumerate(zip(adjlists_all, edge_metapath_indices_list)):
+            if mode == 1:
+                continue
+            for adjlist, indices, use_mask in zip(adjlists, edge_metapath_indices_list, use_masks[mode]):
+                if use_mask > 0:
+                    edges, result_indices, num_nodes, mapping = parse_adjlist(
+                        [adjlist[row[mode//2]] for row in batch_pf], [indices[row[mode//2]] for row in batch_pf],
+                        samples, batch_pf, offset[0], offset[1], mode, use_mask)
+                else:
+                    edges, result_indices, num_nodes, mapping = parse_adjlist(
+                        [adjlist[row[mode//2]] for row in batch_pf], [indices[row[mode//2]] for row in batch_pf],
+                        samples, offset1=offset[0], offset2=offset[1], mode=mode)
+
+                g = dgl.DGLGraph(multigraph=True)
+                g.add_nodes(num_nodes)
+                if len(edges) > 0:
+                    sorted_index = sorted(range(len(edges)), key=lambda i: edges[i])
+                    g.add_edges(*list(zip(*[(edges[i][1], edges[i][0]) for i in sorted_index])))
+                    result_indices = torch.LongTensor(result_indices[sorted_index]).to(device)
+                else:
+                    result_indices = torch.LongTensor(result_indices).to(device)
+                g_lists[mode].append(g)
+                result_indices_lists[mode].append(result_indices)
+                idx_batch_mapped_lists[mode].append(np.array([mapping[row[mode]] for row in batch_pf]))
 
     return g_lists, result_indices_lists, idx_batch_mapped_lists
+

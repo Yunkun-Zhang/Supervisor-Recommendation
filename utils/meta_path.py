@@ -23,7 +23,7 @@ expected_metapaths = [
 
 
 def find_meta_path(data):
-    num_author, num_paper, num_field = len(data['authors']), len(data['papers']), len(data['fields'])
+    num_author, num_paper, num_field = len(data['authors']), len(data['papers']), len(data['fields'])  # index - id(in sql) mapping
     dim = num_author + num_paper + num_field
 
     # create type mask
