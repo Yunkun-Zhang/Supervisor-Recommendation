@@ -11,15 +11,15 @@ edges: A-P, A-F, P-F, Fc-Fp
 Metapath types: FcFpFc, FpFcFp, APA, AFA, PAP, PFP, PFAFP, AFPFA
 """
 
-from process_data import *
+from utils.process_data import *
 import math
-from split_and_sample import *
+from utils.split_and_sample import *
 
 expected_metapaths = [
-        [(0, 1, 0), (0, 2, 0), (0, 2, 1, 2, 0)],
-        [(1, 0, 1), (1, 2, 1), (1, 2, 0, 2, 1)],
-        [(2, 2, 2)]
-    ]
+    [(0, 1, 0), (0, 2, 0), (0, 2, 1, 2, 0)],
+    [(1, 0, 1), (1, 2, 1), (1, 2, 0, 2, 1)],
+    [(2, 2, 2)]
+]
 
 
 def find_meta_path(data):
@@ -88,142 +88,149 @@ def find_meta_path(data):
         paper_field[p].append(f)
         field_paper[f].append(p)
 
-    p_a_p, p_f_p, a_p_a, a_f_a, f_f_f, p_f_a_f_p, a_f_p_f_a = get_meta_paths(author_paper,
-                                                                             paper_author,
-                                                                             author_field,
-                                                                             field_author,
-                                                                             child_parent_field,
-                                                                             parent_child_field,
-                                                                             paper_field,
-                                                                             field_paper,
-                                                                             num_author,
-                                                                             num_paper)
+    get_meta_paths(author_paper,
+                   paper_author,
+                   author_field,
+                   field_author,
+                   child_parent_field,
+                   parent_child_field,
+                   paper_field,
+                   field_paper,
+                   num_author,
+                   num_paper,
+                   num_field)
 
-    # save metapaths
-    metapath_indices_mapping = {(0, 1, 0): p_a_p,
-                                (0, 2, 0): p_f_p,
-                                (0, 2, 1, 2, 0): p_f_a_f_p,
-                                (1, 2, 1): a_f_a,
-                                (1, 0, 1): a_p_a,
-                                (1, 2, 0, 2, 1): a_f_p_f_a,
-                                (2, 2, 2): f_f_f}
 
+def get_meta_paths(author_paper, paper_author, author_field, field_author, child_parent_field,
+                   parent_child_field, paper_field, field_paper, num_author, num_paper, num_field):
     target_idx_lists = [np.arange(num_paper), np.arange(num_author), np.arange(num_field)]
     offset_list = [0, num_paper, num_paper + num_author]
-    for i, metapaths in enumerate(expected_metapaths):
-        for metapath in metapaths:
-            edge_metapath_idx_array = metapath_indices_mapping[metapath]
 
-            with open(f'../data/preprocessed/{i}/' + '-'.join(map(str, metapath)) + '_idx.pickle', 'wb') as out_file:
-                target_metapaths_mapping = {}
-                left = 0
-                right = 0
-                for target_idx in tqdm.tqdm(target_idx_lists[i], desc=f'Saving {metapath}_idx'):
-                    while right < len(edge_metapath_idx_array) and edge_metapath_idx_array[right, 0] == target_idx + \
-                            offset_list[i]:
-                        right += 1
-                    target_metapaths_mapping[target_idx] = edge_metapath_idx_array[left:right, ::-1]
-                    left = right
-                pickle.dump(target_metapaths_mapping, out_file)
+    def save(i, metapath, edge_metapath_idx_array):
+        with open(f'../data/preprocessed/{i}/' + '-'.join(map(str, metapath)) + '_idx.pickle',
+                  'wb') as out_file:
+            target_metapaths_mapping = {}
+            left = 0
+            right = 0
+            for target_idx in tqdm(target_idx_lists[i], desc=f'Saving {metapath}_idx'):
+                while right < len(edge_metapath_idx_array) and edge_metapath_idx_array[right, 0] == target_idx + \
+                        offset_list[i]:
+                    right += 1
+                target_metapaths_mapping[target_idx] = edge_metapath_idx_array[left:right, ::-1]
+                left = right
+            pickle.dump(target_metapaths_mapping, out_file)
 
-            with open(f'../data/preprocessed/{i}/' + '-'.join(map(str, metapath)) + '.adjlist', 'w') as out_file:
-                left = 0
-                right = 0
-                for target_idx in tqdm.tqdm(target_idx_lists[i], desc=f'Saving {metapath}.adjlist'):
-                    while right < len(edge_metapath_idx_array) and edge_metapath_idx_array[right, 0] == target_idx + \
-                            offset_list[i]:
-                        right += 1
-                    neighbors = edge_metapath_idx_array[left:right, -1] - offset_list[i]
-                    neighbors = list(map(str, neighbors))
-                    if len(neighbors) > 0:
-                        out_file.write('{} '.format(target_idx) + ' '.join(neighbors) + '\n')
-                    else:
-                        out_file.write('{}\n'.format(target_idx))
-                    left = right
+        with open(f'../data/preprocessed/{i}/' + '-'.join(map(str, metapath)) + '.adjlist', 'w') as out_file:
+            left = 0
+            right = 0
+            for target_idx in tqdm(target_idx_lists[i], desc=f'Saving {metapath}.adjlist'):
+                while right < len(edge_metapath_idx_array) and edge_metapath_idx_array[right, 0] == target_idx + \
+                        offset_list[i]:
+                    right += 1
+                neighbors = edge_metapath_idx_array[left:right, -1] - offset_list[i]
+                neighbors = list(map(str, neighbors))
+                if len(neighbors) > 0:
+                    out_file.write('{} '.format(target_idx) + ' '.join(neighbors) + '\n')
+                else:
+                    out_file.write('{}\n'.format(target_idx))
+                left = right
 
-
-def get_meta_paths(author_paper, paper_author, author_field, field_author,
-                   child_parent_field, parent_child_field, paper_field, field_paper, num_author, num_paper):
     # create metapaths
-    p_a_p = []
-    for a, p_list in tqdm.tqdm(author_paper.items(), desc='Metapath p-a-p'):
+    """p_a_p = []
+    for a, p_list in tqdm(author_paper.items(), desc='Metapath p-a-p'):
         p_a_p.extend([(p1, a, p2) for p1 in p_list for p2 in p_list])
     p_a_p = np.array(p_a_p)
     p_a_p[:, 1] += num_paper
+    save(0, (0, 1, 0), p_a_p)
 
     p_f_p = []
-    for f, p_list in tqdm.tqdm(field_paper.items(), desc='Metapath p-f-f'):
-        p_f_p.extend([(p1, f, p2) for p1 in p_list for p2 in p_list])
+    for f, p_list in tqdm(field_paper.items(), desc='Metapath p-f-p'):
+        fp = np.array(field_paper[f])
+        p1_candidate_index = np.random.choice(len(fp), math.ceil(0.2 * len(fp)),
+                                              replace=False)
+        p2_candidate_index = np.random.choice(len(fp), math.ceil(0.2 * len(fp)),
+                                              replace=False)
+        p1_candidate = fp[p1_candidate_index]
+        p2_candidate = fp[p2_candidate_index]
+        p_f_p.extend([(p1, f, p2) for p1 in p1_candidate for p2 in p2_candidate])
     p_f_p = np.array(p_f_p)
     p_f_p[:, 1] += num_paper + num_author
+    save(0, (0, 2, 0), p_f_p)
 
     a_p_a = []
-    for p, a_list in tqdm.tqdm(paper_author.items(), desc='Metapath a-p-a'):
+    for p, a_list in tqdm(paper_author.items(), desc='Metapath a-p-a'):
         a_p_a.extend([(a1, p, a2) for a1 in a_list for a2 in a_list])
     a_p_a = np.array(a_p_a)
     a_p_a[:, [0, 2]] += num_paper
+    save(1, (1, 0, 1), a_p_a)
 
     a_f_a = []
-    for f, a_list in tqdm.tqdm(field_author.items(), desc='Metapath a-f-a'):
+    for f, a_list in tqdm(field_author.items(), desc='Metapath a-f-a'):
         a_f_a.extend([(a1, f, a2) for a1 in a_list for a2 in a_list])
     a_f_a = np.array(a_f_a)
     a_f_a += num_paper
     a_f_a[:, 1] += num_author
+    save(1, (1, 2, 1), a_f_a)
 
     f_f_f = []  # both FcFpFc and FpFcFp
-    for f, f_list in tqdm.tqdm(parent_child_field.items(), desc='Metapath f-fp-f'):
+    for f, f_list in tqdm(parent_child_field.items(), desc='Metapath f-fp-f'):
         f_f_f.extend([(f1, f, f2) for f1 in f_list for f2 in f_list])
-    for f, f_list in tqdm.tqdm(child_parent_field.items(), desc='Metapath f-fc-f'):
+    for f, f_list in tqdm(child_parent_field.items(), desc='Metapath f-fc-f'):
         f_f_f.extend([(f1, f, f2) for f1 in f_list for f2 in f_list])
     f_f_f = np.array(f_f_f)
     f_f_f += num_paper + num_author
+    save(2, (2, 2, 2), f_f_f)"""
 
     p_f_a_f_p = []
     # first obtain FAF
     f_a_f = []
-    for a, f_list in tqdm.tqdm(author_field.items(), desc="Metapath f-a-f"):
+    for a, f_list in tqdm(author_field.items(), desc="Metapath f-a-f"):
         f_a_f.extend([(f1, a, f2) for f1 in f_list for f2 in f_list])
     # f_a_f = np.array(f_a_f)
     # f_a_f += num_paper
     # f_a_f[:, [0, 2]] += num_author
     # next extends to two sides for PFAFP
-    for f1, a, f2 in f_a_f:
+    for f1, a, f2 in tqdm(f_a_f, desc='Metapath p-f-a-f-p'):
         # check if these fields are connected to any author
         if not field_paper[f1] or not field_paper[f2]:
             continue
-        p1_candidate_index = np.random.choice(len(field_paper[f1]), math.ceil(0.2 * len(field_paper[f1])),
+        fp1 = np.array(field_paper[f1])
+        fp2 = np.array(field_paper[f2])
+        p1_candidate_index = np.random.choice(len(fp1), math.ceil(0.1 * len(fp1)),
                                               replace=False)
-        p1_candidate = field_paper[f1][p1_candidate_index]
-        p2_candidate_index = np.random.choice(len(field_paper[f2]), math.ceil(0.2 * len(field_paper[f2])),
+        p1_candidate = fp1[p1_candidate_index]
+        p2_candidate_index = np.random.choice(len(fp2), math.ceil(0.1 * len(fp2)),
                                               replace=False)
-        p2_candidate = field_paper[f2][p2_candidate_index]
+        p2_candidate = fp2[p2_candidate_index]
         p_f_a_f_p.extend([(p1, f1, a, f2, p2) for p1 in p1_candidate for p2 in p2_candidate])
     p_f_a_f_p = np.array(p_f_a_f_p)
     p_f_a_f_p[:, [1, 2, 3]] += num_paper
     p_f_a_f_p[:, [1, 3]] += num_author
+    save(0, (0, 2, 1, 2, 0), p_f_a_f_p)
 
     a_f_p_f_a = []
     # first obtain f_p_f
     f_p_f = []
-    for p, f_list in tqdm.tqdm(paper_field.items(), desc="Metapath f-a-f"):
+    for p, f_list in tqdm(paper_field.items(), desc="Metapath f-p-f"):
         f_p_f.extend([(f1, p, f2) for f1 in f_list for f2 in f_list])
     # f_p_f = np.array(f_p_f)
-    for f1, p, f2 in f_p_f:
+    for f1, p, f2 in tqdm(f_p_f, desc='Metapath a-f-p-f-a'):
         # check if these fields are connected to any author
         if not field_author[f1] or not field_author[f2]:
             continue
-        a1_candidate_index = np.random.choice(len(field_author[f1]), math.ceil(0.2 * len(field_author[f1])),
+        fa1 = np.array(field_author[f1])
+        fa2 = np.array(field_author[f2])
+        a1_candidate_index = np.random.choice(len(fa1), math.ceil(0.1 * len(fa1)),
                                               replace=False)
-        a1_candidate = field_author[f1][a1_candidate_index]
-        a2_candidate_index = np.random.choice(len(field_author[f2]), math.ceil(0.2 * len(field_author[f2])),
+        a1_candidate = fa1[a1_candidate_index]
+        a2_candidate_index = np.random.choice(len(fa2), math.ceil(0.1 * len(fa2)),
                                               replace=False)
-        a2_candidate = field_author[f2][a2_candidate_index]
+        a2_candidate = fa2[a2_candidate_index]
         a_f_p_f_a.extend([(a1, f1, p, f2, a2) for a1 in a1_candidate for a2 in a2_candidate])
     a_f_p_f_a = np.array(a_f_p_f_a)
     a_f_p_f_a[:, [0, 1, 3, 4]] += num_paper
     a_f_p_f_a[:, [1, 3]] += num_author
-
-    return p_a_p, p_f_p, a_p_a, a_f_a, f_f_f, p_f_a_f_p, a_f_p_f_a
+    save(1, (1, 2, 0, 2, 1), a_f_p_f_a)
 
 
 def load_mp(path='../data/preprocessed'):
@@ -235,14 +242,14 @@ def load_mp(path='../data/preprocessed'):
                 adj_list.append([line.strip() for line in f])
             with open(path + f'/{mode}/' + '-'.join(map(str, metapath)) + '_idx.pickle', 'rb') as f:
                 idx_list.append(pickle.load(f))
-        adj_lists.append(adj_list)
-        idx_lists.append(idx_list)
+        adj_lists.append(adj_list[:])
+        idx_lists.append(idx_list[:])
     type_mask = np.load(path + '/type_mask.npy')
-    pos = np.load(path + '/train_val_test_pos_author_field.npz')
-    pos.update(np.load(path + '/train_val_test_pos_paper_field.npz'))
-    neg = np.load(path + '/train_val_test_neg_author_field.npz')
-    neg.update(np.load(path + '/train_val_test_neg_paper_field.npz'))
-    return adj_lists, idx_lists, type_mask, pos, neg
+    pos_af = np.load(path + '/train_val_test_pos_author_field.npz')
+    pos_pf = np.load(path + '/train_val_test_pos_paper_field.npz')
+    neg_af = np.load(path + '/train_val_test_neg_author_field.npz')
+    neg_pf = np.load(path + '/train_val_test_neg_paper_field.npz')
+    return adj_lists, idx_lists, type_mask, pos_af, neg_af, pos_pf, neg_pf
 
 
 if __name__ == '__main__':

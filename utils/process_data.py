@@ -270,7 +270,7 @@ def load_data(path='../data'):
 
 if __name__ == '__main__':
     # authors and papers
-    authors = load_authors()
+    """authors = load_authors()
     paper_dict, papers, author_paper = author_paper_edges(authors)
     new_paper_dict, new_papers = filter_paper(paper_dict, 70, 2015)
     np.save('../data/papers', new_papers)
@@ -286,7 +286,7 @@ if __name__ == '__main__':
     np.save('../data/author_field', author_field)
     field_dict, fields, field_parent = parent_field(field_dict, fields)
     np.save('../data/fields', fields)
-    np.save('../data/field_parent', field_parent)
+    np.save('../data/field_parent', field_parent)"""
     fields = np.load('../data/fields.npy')
     papers = np.load('../data/papers.npy')
     paper_dict = list_to_dict(papers)
