@@ -135,11 +135,12 @@ def parse_adjlist(adjlist, edge_metapath_indices, samples=None, exclude=None,
     return edges, result_indices, len(nodes), mapping
 
 
-def parse_minibatch(adjlists, edge_metapath_indices_list, batch, device, samples=None, use_masks=None, offset=None):
+def parse_minibatch(adjlists_all, edge_metapath_indices_list, batch, device, samples=None, use_masks=None, offset=None):
     g_lists = [[], [], []]
     result_indices_lists = [[], [], []]
     idx_batch_mapped_lists = [[], [], []]
-    for mode, (adjlists, edge_metapath_indices_list) in enumerate(zip(adjlists, edge_metapath_indices_list)):
+    for mode, (adjlists, edge_metapath_indices_list) in enumerate(zip(adjlists_all, edge_metapath_indices_list)):
+        print(len(adjlists), len(adjlists[0]))
         for adjlist, indices, use_mask in zip(adjlists, edge_metapath_indices_list, use_masks[mode]):
             if use_mask > 0:
                 edges, result_indices, num_nodes, mapping = parse_adjlist(

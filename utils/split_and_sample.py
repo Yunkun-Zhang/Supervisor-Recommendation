@@ -41,4 +41,3 @@ def get_neg_samples(pos_dct, dim_2, sample_per_node):
         for target in neg_target:
             neg_samples.append([key, target])
     return neg_samples
-
