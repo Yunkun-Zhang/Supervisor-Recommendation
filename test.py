@@ -5,23 +5,31 @@ from models import LP
 from utils.tools import parse_test
 from utils.meta_path import load_mp
 from utils.process_data import list_to_dict
-from train import etype_lists, dropout_rate, num_ntype, num_paper, num_author, args
+
+num_paper = 44016
+num_author = 16571
+hidden_dim = 64
+num_heads = 8
+attn_vec_dim = 128
+rnn_type = 'RotatE0'
+etype_lists = [[[0, 1], [2, 3], [2, 5, 4, 3]],
+               [[1, 0], [4, 5], [4, 3, 2, 5]],
+               [[None, None]]]
 
 
-def predict_and_save_emb(hidden_dim, num_heads, attn_vec_dim, rnn_type):
+def predict_and_save_emb():
     adjlists, edge_metapath_indices_lists, type_mask, _, _, _, _ = load_mp('data/preprocessed')
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     features_list = []
     in_dims = []
     # feats_type = 1
-    for i in range(num_ntype):
+    for i in range(3):
         dim = 10
         num_nodes = (type_mask == i).sum()
         in_dims.append(dim)
         features_list.append(torch.zeros((num_nodes, 10)).to(device))
 
-    net = LP([3, 3, 1], 6, etype_lists, in_dims, hidden_dim, hidden_dim,
-             num_heads, attn_vec_dim, rnn_type, dropout_rate)
+    net = LP([3, 3, 1], 6, etype_lists, in_dims, hidden_dim, hidden_dim, num_heads, attn_vec_dim, rnn_type, 0.5)
     net.to(device)
     net.load_state_dict(torch.load('checkpoint/checkpoint.pt'))
     net.eval()
@@ -62,20 +70,19 @@ def predict_and_save_emb(hidden_dim, num_heads, attn_vec_dim, rnn_type):
         # np.save('embeddings/author_embs', author_embs)
 
 
-def predict(hidden_dim, num_heads, attn_vec_dim, rnn_type, paper_id_list=None, author_id_list=None):
+def predict(paper_id_list=None, author_id_list=None):
     adjlists, edge_metapath_indices_lists, type_mask, _, _, _, _ = load_mp('data/preprocessed')
     device = torch.device('cpu')
     features_list = []
     in_dims = []
     # feats_type = 1
-    for i in range(num_ntype):
+    for i in range(3):
         dim = 10
         num_nodes = (type_mask == i).sum()
         in_dims.append(dim)
         features_list.append(torch.zeros((num_nodes, 10)))
 
-    net = LP([3, 3, 1], 6, etype_lists, in_dims, hidden_dim, hidden_dim,
-             num_heads, attn_vec_dim, rnn_type, dropout_rate)
+    net = LP([3, 3, 1], 6, etype_lists, in_dims, hidden_dim, hidden_dim, num_heads, attn_vec_dim, rnn_type, 0.5)
     net.load_state_dict(torch.load('checkpoint/checkpoint.pt'))
     net.eval()
 
@@ -107,11 +114,5 @@ def predict(hidden_dim, num_heads, attn_vec_dim, rnn_type, paper_id_list=None, a
     return paper_emb, author_emb
 
 
-def paper_id_to_emb(paper_id):
-    papers = np.load('embeddings/paper_embs.npy')
-    paper_dict = list_to_dict(papers)
-    index = paper_dict[paper_id]
-
-
 if __name__ == '__main__':
-    predict_and_save_emb(args.hidden_dim, args.num_heads, args.attn_vec_dim, args.rnn_type)
+    predict_and_save_emb()
