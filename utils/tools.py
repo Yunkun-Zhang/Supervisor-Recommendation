@@ -234,3 +234,25 @@ def parse_minibatch_backup(adjlists_all, edge_metapath_indices_lists, batch_af, 
             idx_batch_mapped_lists[mode].append(np.array([mapping[row[mode // 2]] for row in batch_pf]))
     print(len(result_indices_lists[2]))
     return g_lists, result_indices_lists, idx_batch_mapped_lists
+
+
+def parse_test(adjlists, edge_metapath_indices_lists, nodes, device, mode):
+    g_list = []
+    result_indices_list = []
+    idx_batch_mapped_list = []
+    for adjlist, indices in zip(adjlists[mode], edge_metapath_indices_lists[mode]):
+        edges, result_indices, num_nodes, mapping = parse_adjlist(
+            [adjlist[node] for node in nodes], [indices[node] for node in nodes]
+        )
+        g = dgl.DGLGraph(multigraph=True).to(device)
+        g.add_nodes(num_nodes)
+        if len(edges) > 0:
+            sorted_index = sorted(range(len(edges)), key=lambda i: edges[i])
+            g.add_edges(*list(zip(*[(edges[i][1], edges[i][0]) for i in sorted_index])))
+            result_indices = torch.LongTensor(result_indices[sorted_index]).to(device)
+        else:
+            result_indices = torch.LongTensor(result_indices).to(device)
+        g_list.append(g)
+        result_indices_list.append(result_indices)
+        idx_batch_mapped_list.append(np.array([mapping[node] for node in nodes]))
+    return g_list, result_indices_list, idx_batch_mapped_list

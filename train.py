@@ -18,9 +18,9 @@ etype_lists = [[[0, 1], [2, 3], [2, 5, 4, 3]],
 use_masks_af = [[0, 0, 3], [0, 1, 1], [0]]
 use_masks_pf = [[0, 1, 1], [0, 0, 3], [0]]
 no_masks = [[0] * 3, [0] * 3, [0]]
-num_paper = 197378
-num_author = 39791
-num_field = 110249
+num_paper = 44016
+num_author = 16571
+num_field = 35050
 expected_metapaths = [
     [(0, 1, 0), (0, 2, 0), (0, 2, 1, 2, 0)],
     [(1, 0, 1), (1, 2, 1), (1, 2, 0, 2, 1)],
@@ -65,16 +65,22 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
 
     num_af, num_pf = len(train_pos_author_field_all), len(train_pos_paper_field_all)
     if num_af < num_pf:
-        train_pos_author_field_all = train_pos_author_field_all[np.random.choice(num_af, num_pf, replace=True)]
+        complementary_af = train_pos_author_field_all[np.random.choice(num_af, num_pf - num_af, replace=True)]
+        train_pos_author_field_all = np.concatenate((train_pos_author_field_all, complementary_af))
     else:
-        train_pos_paper_field_all = train_pos_paper_field_all[np.random.choice(num_pf, num_af, replace=True)]
+        complementary_pf = train_pos_paper_field_all[np.random.choice(num_pf, num_af - num_pf, replace=True)]
+        train_pos_paper_field_all = np.concatenate((train_pos_paper_field_all, complementary_pf))
     train_steps = max(num_af, num_pf)
+
     num_af, num_pf = len(val_pos_author_field_all), len(val_pos_paper_field_all)
     if num_af > num_pf:
-        val_pos_paper_field = val_pos_paper_field_all[np.random.choice(num_pf, num_af, replace=True)]
+        complementary_pf = val_pos_paper_field_all[np.random.choice(num_pf, num_af - num_pf, replace=True)]
+        val_pos_paper_field_all = np.concatenate((val_pos_paper_field_all, complementary_pf))
     else:
-        val_pos_author_field = val_pos_author_field_all[np.random.choice(num_af, num_pf, replace=True)]
+        complementary_af = val_pos_author_field_all[np.random.choice(num_af, num_pf - num_af, replace=True)]
+        val_pos_author_field_all = np.concatenate((val_pos_author_field_all, complementary_af))
     val_steps = max(num_af, num_pf)
+
     # run
     for epoch in range(epochs):
         # adjust sample counts
@@ -99,9 +105,9 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
         val_idx_generator = IndexGenerator(batch_size=batch_size, num_data=val_steps, shuffle=False)
 
         # train
-        for itr in tqdm.tqdm(range(train_pos_idx_generator.num_iterations()),
-                             desc=f'Epoch {epoch + 1:>3}/{epochs}'):
-            # for itr in range(train_pos_idx_generator.num_iterations()):
+        # for itr in tqdm.tqdm(range(train_pos_idx_generator.num_iterations()),
+        #                      desc=f'Epoch {epoch + 1:>3}/{epochs}'):
+        for itr in range(train_pos_idx_generator.num_iterations()):
             train_pos_idx_batch = train_pos_idx_generator.next()
             train_pos_idx_batch.sort()
             train_pos_af_batch = train_pos_author_field_all[train_pos_idx_batch].tolist()
@@ -160,7 +166,7 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
             train_loss = - torch.mean(F.logsigmoid(pos_af_out) + F.logsigmoid(neg_af_out)) \
                          - torch.mean(F.logsigmoid(pos_pf_out) + F.logsigmoid(neg_pf_out))
             if itr % 200 == 0:
-                print(f"train loss in iter {itr} is: {train_loss.item()}")
+                print(f"Epoch {epoch + 1:>3}/{epochs}: train loss in iter {itr} is: {train_loss.item()}")
             # autograd
             optimizer.zero_grad()
             train_loss.backward()
@@ -218,9 +224,8 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
                 tmp = - torch.mean(F.logsigmoid(pos_af_out) + F.logsigmoid(neg_af_out)) \
                       - torch.mean(F.logsigmoid(pos_pf_out) + F.logsigmoid(neg_pf_out))
                 if itr % 20 == 0:
-                    print(f"val loss in iter {itr} is {tmp}")
+                    print(f"Epoch {epoch + 1:>3}/{epochs}: val loss in iter {itr} is {tmp}")
                 val_loss.append(tmp)
-            print(f"averaging over val loss: {val_loss}")
             val_loss = torch.mean(torch.tensor(val_loss))
             print(f'Epoch {epoch + 1:>3}/{epochs}: train loss = {train_loss.item():.6f}, val_loss = {val_loss.item():.6f}')
             early_stopping(val_loss, net)
@@ -308,17 +313,19 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
     print(f'AP = {ap_af}, {ap_pf}')
 
 
-if __name__ == '__main__':
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--hidden-dim', type=int, default=64)
-    ap.add_argument('--num_heads', type=int, default=8)
-    ap.add_argument('--attn-vec-dim', type=int, default=128)
-    ap.add_argument('--rnn-type', default='RotatE0')
-    ap.add_argument('--batch-size', type=int, default=32)
-    ap.add_argument('--epochs', type=int, default=100)
-    ap.add_argument('--patience', type=int, default=20)
-    ap.add_argument('--samples', type=int, default=100)
-    args = ap.parse_args()
+ap = argparse.ArgumentParser()
+ap.add_argument('--hidden-dim', type=int, default=64)
+ap.add_argument('--num_heads', type=int, default=8)
+ap.add_argument('--attn-vec-dim', type=int, default=128)
+ap.add_argument('--rnn-type', default='RotatE0')
+ap.add_argument('--batch-size', type=int, default=64)
+ap.add_argument('--epochs', type=int, default=100)
+ap.add_argument('--patience', type=int, default=20)
+ap.add_argument('--samples', type=int, default=100)
+ap.add_argument('--split', action='store_true')
+args = ap.parse_args()
 
+
+if __name__ == '__main__':
     run(args.hidden_dim, args.num_heads, args.attn_vec_dim, args.rnn_type,
         args.batch_size, args.epochs, args.patience, args.samples)

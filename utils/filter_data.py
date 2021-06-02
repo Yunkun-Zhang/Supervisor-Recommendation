@@ -8,7 +8,7 @@ old_path = '../data/old2/'
 
 def get_selected_fields():
     """
-    filter by level 0 field = Computer Science
+    filter by level 0 field
     """
     all_selected_fields = set()
     acemap = {'user': 'mobilenet',
@@ -20,7 +20,11 @@ def get_selected_fields():
     db = pymysql.connect(**acemap)
     cursor = db.cursor()
 
-    target_id = ['2030591755']
+    target_id = ['2030591755',  # CS
+                 '2025112345',  # physics
+                 # '2028681480',  # biology
+                 # '2039961440',  # medicine
+                ]
     for _ in range(3):
         query = 'select field_id from am_paper.am_field_relation where parent_id'
         if len(target_id) == 1:
@@ -87,35 +91,44 @@ def filter_ff_edges(old_fields, new_field_dict):
 
 
 if __name__ == '__main__':
+    save = True
+    save_path = '../data'
+
     old_fields = np.load(old_path + 'fields.npy')
     fields = set(old_fields)
     new_fields = get_selected_fields()
     fields = fields.intersection(new_fields)
     lst = list(fields)
     print(len(lst), 'fields')
-    # np.save('../data/fields.npy', lst)
+    if save: np.save(save_path + '/fields.npy', lst)
+
     field_dict = list_to_dict(lst)  # field_id: new_index
     field_author_dict, new_author_dict = filter_other(old_fields, fields, 'author')
     with open(old_path + 'filtered_authors.pickle', 'rb') as f:
         authors = pickle.load(f)
     authors = create_others(new_author_dict, authors)
-    # with open('../data/filtered_authors.pickle', 'wb') as f:
-    #     pickle.dump(authors, f)
+    if save:
+        with open(save_path + '/filtered_authors.pickle', 'wb') as f:
+            pickle.dump(authors, f)
     print(len(authors), 'authors')
+
     field_paper_dict, new_paper_dict = filter_other(old_fields, fields, 'paper')
-    print(len(field_paper_dict), 'abaaba')
     papers = create_others(new_paper_dict, np.load(old_path + 'papers.npy'))
     print(len(new_paper_dict), 'papers')
-    # np.save('../data/papers', papers)
+    if save: np.save(save_path + '/papers', papers)
+
     new_ap = filter_ap_edges(new_author_dict, new_paper_dict)
     print(len(new_ap), 'a-p edges')
-    # np.save('../data/author_paper', new_ap)
+    if save: np.save(save_path + '/author_paper', new_ap)
+
     new_ff = filter_ff_edges(old_fields, field_dict)
     print(len(new_ff), 'f-f edges')
-    # np.save('../data/field_parent', new_ff)
+    if save: np.save(save_path + '/field_parent', new_ff)
+
     new_af = create_other_field_edges(field_author_dict, new_author_dict, field_dict)
     print(len(new_af), 'a-f edges')
-    # np.save('../data/author_field', new_af)
+    if save: np.save(save_path + '/author_field', new_af)
+
     new_pf = create_other_field_edges(field_paper_dict, new_paper_dict, field_dict)
     print(len(new_pf), 'p-f edges')
-    # np.save('../data/paper_field', new_pf)"""
+    if save: np.save(save_path + '/paper_field', new_pf)

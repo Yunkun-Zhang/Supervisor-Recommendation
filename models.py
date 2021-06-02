@@ -179,7 +179,7 @@ class MAGNN(nn.Module):
                                                  use_minibatch=use_minibatch))
 
         # metapath-level attention
-        # note that the acutal input dimension should consider the number of heads
+        # note that the actual input dimension should consider the number of heads
         # as multiple head outputs are concatenated together
         self.fc1 = nn.Linear(out_dim * num_heads, attn_vec_dim, bias=True)
         self.fc2 = nn.Linear(attn_vec_dim, 1, bias=False)
@@ -270,11 +270,11 @@ class LPLayer(nn.Module):
         h_author = self.author_layer(
             (g_lists[1], features, type_mask, edge_metapath_indices_lists[1], target_idx_lists[1])) if g_lists[1] else None
         h_field = self.field_layer(
-            (g_lists[2], features, type_mask, edge_metapath_indices_lists[2], target_idx_lists[2]))
+            (g_lists[2], features, type_mask, edge_metapath_indices_lists[2], target_idx_lists[2])) if g_lists[2] else None
 
         logits_paper = self.fc_paper(h_paper) if g_lists[0] else None
         logits_author = self.fc_author(h_author) if g_lists[1] else None
-        logits_field = self.fc_field(h_field)
+        logits_field = self.fc_field(h_field) if g_lists[2] else None
 
         return [logits_paper, logits_author, logits_field], [h_paper, h_author, h_field]
 

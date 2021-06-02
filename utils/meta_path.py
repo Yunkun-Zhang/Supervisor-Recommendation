@@ -22,7 +22,7 @@ expected_metapaths = [
 ]
 
 
-def find_meta_path(data):
+def find_meta_path(data, split=True):
     # index - id(in sql) mapping
     num_author, num_paper, num_field = len(data['authors']), len(data['papers']), len(data['fields'])
     dim = num_author + num_paper + num_field
@@ -42,12 +42,18 @@ def find_meta_path(data):
     for p, f in data['paper_field']:
         paper_field[p].append(f)
 
-    neg_af = get_neg_samples(author_field, num_field, 10)
-    neg_pf = get_neg_samples(paper_field, num_field, 10)
-    af_pos_train, af_pos_val, af_pos_test = get_train_val_test_split(data['author_field'], 0.1, 0.1)
-    pf_pos_train, pf_pos_val, pf_pos_test = get_train_val_test_split(data['paper_field'], 0.1, 0.1)
-    af_neg_train, af_neg_val, af_neg_test = get_train_val_test_split(neg_af, 0.1, 0.1)
-    pf_neg_train, pf_neg_val, pf_neg_test = get_train_val_test_split(neg_pf, 0.1, 0.1)
+    num = max(len(data['author_field']), len(data['paper_field']))
+    neg_af = get_neg_samples(author_field, num_field, num // num_author + 1)
+    neg_pf = get_neg_samples(paper_field, num_field, num // num_paper + 1)
+    if split:
+        af_pos_train, af_pos_val, af_pos_test = get_train_val_test_split(data['author_field'], 0.1, 0.1)
+        pf_pos_train, pf_pos_val, pf_pos_test = get_train_val_test_split(data['paper_field'], 0.1, 0.1)
+        af_neg_train, af_neg_val, af_neg_test = get_train_val_test_split(neg_af, 0.1, 0.1)
+        pf_neg_train, pf_neg_val, pf_neg_test = get_train_val_test_split(neg_pf, 0.1, 0.1)
+    else:
+        af_pos_train, af_neg_train, pf_pos_train, pf_neg_train = data['author_field'], neg_af, data['paper_field'], neg_pf
+        af_pos_val = af_pos_test = af_neg_val = af_neg_test = []
+        pf_pos_val = pf_pos_test = pf_neg_val = pf_neg_test = []
 
     np.savez('../data/preprocessed/train_val_test_neg_author_field.npz',
              train_neg_author_field=af_neg_train,
@@ -153,8 +159,8 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
     p_f_p = []
     for f, p_list in tqdm(field_paper.items(), desc='Metapath p-f-p'):
         fp = np.array(field_paper[f])
-        p1_candidate_index = np.random.choice(len(fp), math.ceil(1 * len(fp)), replace=False)
-        p2_candidate_index = np.random.choice(len(fp), math.ceil(1 * len(fp)), replace=False)
+        p1_candidate_index = np.random.choice(len(fp), math.ceil(0.6 * len(fp)), replace=False)
+        p2_candidate_index = np.random.choice(len(fp), math.ceil(0.6 * len(fp)), replace=False)
         p1_candidate = fp[p1_candidate_index]
         p2_candidate = fp[p2_candidate_index]
         p_f_p.extend([(p1, f, p2) for p1 in p1_candidate for p2 in p2_candidate])
@@ -209,9 +215,9 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
             continue
         fp1 = np.array(field_paper[f1])
         fp2 = np.array(field_paper[f2])
-        p1_candidate_index = np.random.choice(len(fp1), math.ceil(1 * len(fp1)), replace=False)
+        p1_candidate_index = np.random.choice(len(fp1), math.ceil(0.2 * len(fp1)), replace=False)
         p1_candidate = fp1[p1_candidate_index]
-        p2_candidate_index = np.random.choice(len(fp2), math.ceil(1 * len(fp2)), replace=False)
+        p2_candidate_index = np.random.choice(len(fp2), math.ceil(0.2 * len(fp2)), replace=False)
         p2_candidate = fp2[p2_candidate_index]
         p_f_a_f_p.extend([(p1, f1, a, f2, p2) for p1 in p1_candidate for p2 in p2_candidate])
     print('Sorting p-f-a-f-p...')
@@ -233,9 +239,9 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
             continue
         fa1 = np.array(field_author[f1])
         fa2 = np.array(field_author[f2])
-        a1_candidate_index = np.random.choice(len(fa1), math.ceil(1 * len(fa1)), replace=False)
+        a1_candidate_index = np.random.choice(len(fa1), math.ceil(0.2 * len(fa1)), replace=False)
         a1_candidate = fa1[a1_candidate_index]
-        a2_candidate_index = np.random.choice(len(fa2), math.ceil(1 * len(fa2)), replace=False)
+        a2_candidate_index = np.random.choice(len(fa2), math.ceil(0.2 * len(fa2)), replace=False)
         a2_candidate = fa2[a2_candidate_index]
         a_f_p_f_a.extend([(a1, f1, p, f2, a2) for a1 in a1_candidate for a2 in a2_candidate])
     print('Sorting a-f-p-f-a...')
@@ -266,5 +272,5 @@ def load_mp(path='../data/preprocessed'):
 
 
 if __name__ == '__main__':
-    data = load_data()
-    find_meta_path(data)
+    data = load_data('../data/CS+med')
+    find_meta_path(data, split=True)
