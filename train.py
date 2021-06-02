@@ -14,7 +14,7 @@ lr = 0.005
 weight_decay = 0.001
 etype_lists = [[[0, 1], [2, 3], [2, 5, 4, 3]],
                [[1, 0], [4, 5], [4, 3, 2, 5]],
-               [[6, 6]]]
+               [[None, None]]]
 use_masks_af = [[0, 0, 3], [0, 1, 1], [0]]
 use_masks_pf = [[0, 1, 1], [0, 0, 3], [0]]
 no_masks = [[0] * 3, [0] * 3, [0]]
@@ -29,7 +29,7 @@ expected_metapaths = [
 
 
 def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patience, neighbor_samples):
-    adjlists, edge_metapath_indices_list, type_mask, pos_af, neg_af, pos_pf, neg_pf = load_mp('data/preprocessed')
+    adjlists, edge_metapath_indices_lists, type_mask, pos_af, neg_af, pos_pf, neg_pf = load_mp('data/preprocessed')
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     features_list = []
     in_dims = []
@@ -53,12 +53,8 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
     test_neg_author_field = neg_af['test_neg_author_field']
     test_neg_paper_field = neg_pf['test_neg_paper_field']
 
-    y_true_af = np.array([1] * len(test_pos_author_field) + [0] * len(test_neg_author_field))
-    y_true_pf = np.array([1] * len(test_pos_paper_field) + [0] * len(test_neg_paper_field))
-    # auc_af, auc_pf, ap_af, ap_pf = [], [], [], []
-
     # define model
-    net = LP([3, 3, 1], 7, etype_lists, in_dims, hidden_dim, hidden_dim,
+    net = LP([3, 3, 1], 6, etype_lists, in_dims, hidden_dim, hidden_dim,
              num_heads, attn_vec_dim, rnn_type, dropout_rate)
     net.to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
@@ -67,80 +63,93 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
     early_stopping = EarlyStopping(patience=patience, verbose=True,
                                    save_path=f'checkpoint/checkpoint.pt')
 
+    num_af, num_pf = len(train_pos_author_field_all), len(train_pos_paper_field_all)
+    if num_af < num_pf:
+        train_pos_author_field_all = train_pos_author_field_all[np.random.choice(num_af, num_pf, replace=True)]
+    else:
+        train_pos_paper_field_all = train_pos_paper_field_all[np.random.choice(num_pf, num_af, replace=True)]
+    train_steps = max(num_af, num_pf)
+    num_af, num_pf = len(val_pos_author_field_all), len(val_pos_paper_field_all)
+    if num_af > num_pf:
+        val_pos_paper_field = val_pos_paper_field_all[np.random.choice(num_pf, num_af, replace=True)]
+    else:
+        val_pos_author_field = val_pos_author_field_all[np.random.choice(num_af, num_pf, replace=True)]
+    val_steps = max(num_af, num_pf)
     # run
     for epoch in range(epochs):
         # adjust sample counts
-        num_af, num_pf = len(train_pos_author_field_all), len(train_pos_paper_field_all)
+        """num_af, num_pf = len(train_pos_author_field_all), len(train_pos_paper_field_all)
         if num_af < num_pf:
             train_pos_paper_field = train_pos_paper_field_all[np.random.choice(num_pf, num_af, replace=False)]
             train_pos_author_field = train_pos_author_field_all.copy()
-            # train_neg_paper_field = train_neg_paper_field[np.random.choice(num_pf, num_af, replace=False)]
         else:
             train_pos_author_field = train_pos_author_field_all[np.random.choice(num_af, num_pf, replace=False)]
             train_pos_paper_field = train_pos_paper_field_all.copy()
-            # train_neg_author_field = np.random.choice(train_neg_author_field, num_pf, replace=False)
-        train_steps = min(num_pf, num_af)
+        train_steps = min(num_pf, num_af)"""
         train_pos_idx_generator = IndexGenerator(batch_size=batch_size, num_data=train_steps)
 
-        num_af, num_pf = len(val_pos_author_field_all), len(val_pos_paper_field_all)
+        """num_af, num_pf = len(val_pos_author_field_all), len(val_pos_paper_field_all)
         if num_af < num_pf:
             val_pos_paper_field = val_pos_paper_field_all[np.random.choice(num_pf, num_af, replace=False)]
             val_pos_author_field = val_pos_author_field_all.copy()
-            # val_neg_paper_field = np.random.choice(val_neg_paper_field, num_af, replace=False)
         else:
             val_pos_author_field = val_pos_author_field_all[np.random.choice(num_af, num_pf, replace=False)]
             val_pos_paper_field = val_pos_paper_field_all.copy()
-            # val_neg_author_field = np.random.choice(val_neg_author_field, num_pf, replace=False)
-        val_steps = min(num_af, num_pf)
+        val_steps = min(num_af, num_pf)"""
         val_idx_generator = IndexGenerator(batch_size=batch_size, num_data=val_steps, shuffle=False)
 
         # train
         for itr in tqdm.tqdm(range(train_pos_idx_generator.num_iterations()),
                              desc=f'Epoch {epoch + 1:>3}/{epochs}'):
+            # for itr in range(train_pos_idx_generator.num_iterations()):
             train_pos_idx_batch = train_pos_idx_generator.next()
             train_pos_idx_batch.sort()
-            train_pos_af_batch = train_pos_author_field[train_pos_idx_batch].tolist()
-            train_pos_pf_batch = train_pos_paper_field[train_pos_idx_batch].tolist()
+            train_pos_af_batch = train_pos_author_field_all[train_pos_idx_batch].tolist()
+            train_pos_pf_batch = train_pos_paper_field_all[train_pos_idx_batch].tolist()
             train_neg_idx_batch = np.random.choice(len(train_neg_author_field), len(train_pos_idx_batch))
             train_neg_idx_batch.sort()
             train_neg_af_batch = train_neg_author_field[train_neg_idx_batch].tolist()
             train_neg_pf_batch = train_neg_paper_field[train_neg_idx_batch].tolist()
 
-            train_pos_af_g_lists, train_pos_af_indices_lists, train_pos_af_idx_batch_mapped_lists = parse_minibatch(
-                adjlists, edge_metapath_indices_list, train_pos_af_batch, device, neighbor_samples,
-                use_masks_af, offset=[num_paper, num_paper + num_author]
+            # af
+            train_pos_g_lists, train_pos_indices_lists, train_pos_idx_batch_mapped_lists = parse_minibatch(
+                adjlists, edge_metapath_indices_lists, train_pos_af_batch, device,
+                neighbor_samples, use_masks_af, offset=[num_paper, num_paper + num_author], af=True
             )
+            train_neg_g_lists, train_neg_indices_lists, train_neg_idx_batch_mapped_lists = parse_minibatch(
+                adjlists, edge_metapath_indices_lists, train_neg_af_batch, device,
+                neighbor_samples, no_masks, offset=[num_paper, num_paper + num_author], af=True
+            )
+            # pf
             train_pos_pf_g_lists, train_pos_pf_indices_lists, train_pos_pf_idx_batch_mapped_lists = parse_minibatch(
-                adjlists, edge_metapath_indices_list, train_pos_pf_batch, device, neighbor_samples,
-                use_masks_pf, offset=[0, num_paper + num_author]
-            )
-            train_neg_af_g_lists, train_neg_af_indices_lists, train_neg_af_idx_batch_mapped_lists = parse_minibatch(
-                adjlists, edge_metapath_indices_list, train_neg_af_batch, device, neighbor_samples,
-                no_masks, offset=[num_paper, num_paper + num_author]
+                adjlists, edge_metapath_indices_lists, train_pos_pf_batch, device, neighbor_samples,
+                use_masks_pf, offset=[0, num_paper + num_author], af=False
             )
             train_neg_pf_g_lists, train_neg_pf_indices_lists, train_neg_pf_idx_batch_mapped_lists = parse_minibatch(
-                adjlists, edge_metapath_indices_list, train_neg_pf_batch, device, neighbor_samples,
-                no_masks, offset=[0, num_paper + num_author]
+                adjlists, edge_metapath_indices_lists, train_neg_pf_batch, device, neighbor_samples,
+                no_masks, offset=[0, num_paper + num_author], af=False
             )
 
-            [_, pos_embedding_af_author, pos_embedding_af_field], _ = net((
-                train_pos_af_g_lists, features_list, type_mask, train_pos_af_indices_lists,
-                train_pos_af_idx_batch_mapped_lists))
-            [_, neg_embedding_af_author, neg_embedding_af_field], _ = net((
-                train_neg_af_g_lists, features_list, type_mask, train_neg_af_indices_lists,
-                train_neg_af_idx_batch_mapped_lists))
+            [pos_embedding_paper, pos_embedding_author, pos_embedding_field], _ = net((
+                train_pos_g_lists, features_list, type_mask, train_pos_indices_lists,
+                train_pos_idx_batch_mapped_lists))
+            [neg_embedding_paper, neg_embedding_author, neg_embedding_field], _ = net((
+                train_neg_g_lists, features_list, type_mask, train_neg_indices_lists,
+                train_neg_idx_batch_mapped_lists))
             [pos_embedding_pf_paper, _, pos_embedding_pf_field], _ = net((
                 train_pos_pf_g_lists, features_list, type_mask, train_pos_pf_indices_lists,
                 train_pos_pf_idx_batch_mapped_lists))
             [neg_embedding_pf_paper, _, neg_embedding_pf_field], _ = net((
                 train_neg_pf_g_lists, features_list, type_mask, train_neg_pf_indices_lists,
                 train_neg_pf_idx_batch_mapped_lists))
-            pos_embedding_af_author = pos_embedding_af_author.view(-1, 1, pos_embedding_af_author.shape[1])
-            pos_embedding_af_field = pos_embedding_af_field.view(-1, pos_embedding_af_field.shape[1], 1)
-            neg_embedding_af_author = neg_embedding_af_author.view(-1, 1, neg_embedding_af_author.shape[1])
-            neg_embedding_af_field = neg_embedding_af_field.view(-1, neg_embedding_af_field.shape[1], 1)
-            pos_af_out = torch.bmm(pos_embedding_af_author, pos_embedding_af_field)
-            neg_af_out = -torch.bmm(neg_embedding_af_author, neg_embedding_af_field)
+            # af
+            pos_embedding_author = pos_embedding_author.view(-1, 1, pos_embedding_author.shape[1])
+            pos_embedding_field = pos_embedding_field.view(-1, pos_embedding_field.shape[1], 1)
+            neg_embedding_author = neg_embedding_author.view(-1, 1, neg_embedding_author.shape[1])
+            neg_embedding_field = neg_embedding_field.view(-1, neg_embedding_field.shape[1], 1)
+            pos_af_out = torch.bmm(pos_embedding_author, pos_embedding_field)
+            neg_af_out = -torch.bmm(neg_embedding_author, neg_embedding_field)
+            # pf
             pos_embedding_pf_paper = pos_embedding_pf_paper.view(-1, 1, pos_embedding_pf_paper.shape[1])
             pos_embedding_pf_field = pos_embedding_pf_field.view(-1, pos_embedding_pf_field.shape[1], 1)
             neg_embedding_pf_paper = neg_embedding_pf_paper.view(-1, 1, neg_embedding_pf_paper.shape[1])
@@ -150,11 +159,14 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
 
             train_loss = - torch.mean(F.logsigmoid(pos_af_out) + F.logsigmoid(neg_af_out)) \
                          - torch.mean(F.logsigmoid(pos_pf_out) + F.logsigmoid(neg_pf_out))
-
+            if itr % 200 == 0:
+                print(f"train loss in iter {itr} is: {train_loss.item()}")
             # autograd
             optimizer.zero_grad()
             train_loss.backward()
             optimizer.step()
+
+            # print(f'\rEpoch {epoch + 1:>3}/{epochs}: train loss = {train_loss.item():.6f}', end='')
 
         # validation
         net.eval()
@@ -162,27 +174,27 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
         with torch.no_grad():
             for itr in range(val_idx_generator.num_iterations()):
                 val_idx_batch = val_idx_generator.next()
-                val_pos_af_batch = val_pos_author_field[val_idx_batch].tolist()
-                val_pos_pf_batch = val_pos_paper_field[val_idx_batch].tolist()
+                val_pos_af_batch = val_pos_author_field_all[val_idx_batch].tolist()
+                val_pos_pf_batch = val_pos_paper_field_all[val_idx_batch].tolist()
                 val_neg_af_batch = val_neg_author_field[val_idx_batch].tolist()
                 val_neg_pf_batch = val_neg_paper_field[val_idx_batch].tolist()
-                val_pos_af_g_lists, val_pos_af_indices_lists, val_pos_af_idx_batch_mapped_lists = parse_minibatch(
-                    adjlists, edge_metapath_indices_list, val_pos_af_batch, device, neighbor_samples,
+                val_pos_g_lists, val_pos_indices_lists, val_pos_idx_batch_mapped_lists = parse_minibatch(
+                    adjlists, edge_metapath_indices_lists, val_pos_af_batch, device, neighbor_samples,
                     no_masks, [num_paper, num_paper + num_author])
                 val_pos_pf_g_lists, val_pos_pf_indices_lists, val_pos_pf_idx_batch_mapped_lists = parse_minibatch(
-                    adjlists, edge_metapath_indices_list, val_pos_pf_batch, device, neighbor_samples,
-                    no_masks, [0, num_paper + num_author])
+                    adjlists, edge_metapath_indices_lists, val_pos_pf_batch, device, neighbor_samples,
+                    no_masks, [0, num_paper + num_author], af=False)
                 val_neg_af_g_lists, val_neg_af_indices_lists, val_neg_af_idx_batch_mapped_lists = parse_minibatch(
-                    adjlists, edge_metapath_indices_list, val_neg_af_batch, device, neighbor_samples,
+                    adjlists, edge_metapath_indices_lists, val_neg_af_batch, device, neighbor_samples,
                     no_masks, [num_paper, num_paper + num_author])
                 val_neg_pf_g_lists, val_neg_pf_indices_lists, val_neg_pf_idx_batch_mapped_lists = parse_minibatch(
-                    adjlists, edge_metapath_indices_list, val_neg_pf_batch, device, neighbor_samples,
-                    no_masks, [0, num_paper + num_author])
+                    adjlists, edge_metapath_indices_lists, val_neg_pf_batch, device, neighbor_samples,
+                    no_masks, [0, num_paper + num_author], af=False)
 
-                [_, pos_embedding_af_author, pos_embedding_af_field], _ = net((
-                    val_pos_af_g_lists, features_list, type_mask, val_pos_af_indices_lists,
-                    val_pos_af_idx_batch_mapped_lists))
-                [_, neg_embedding_af_author, neg_embedding_af_field], _ = net((
+                [pos_embedding_paper, pos_embedding_author, pos_embedding_field], _ = net((
+                    val_pos_g_lists, features_list, type_mask, val_pos_indices_lists,
+                    val_pos_idx_batch_mapped_lists))
+                [neg_embedding_paper, neg_embedding_author, neg_embedding_field], _ = net((
                     val_neg_af_g_lists, features_list, type_mask, val_neg_af_indices_lists,
                     val_neg_af_idx_batch_mapped_lists))
                 [pos_embedding_pf_paper, _, pos_embedding_pf_field], _ = net((
@@ -191,103 +203,109 @@ def run(hidden_dim, num_heads, attn_vec_dim, rnn_type, batch_size, epochs, patie
                 [neg_embedding_pf_paper, _, neg_embedding_pf_field], _ = net((
                     val_neg_pf_g_lists, features_list, type_mask, val_neg_pf_indices_lists,
                     val_neg_pf_idx_batch_mapped_lists))
-                pos_embedding_af_author = pos_embedding_af_author.view(-1, 1, pos_embedding_af_author.shape[1])
-                pos_embedding_af_field = pos_embedding_af_field.view(-1, pos_embedding_af_field.shape[1], 1)
-                neg_embedding_af_author = neg_embedding_af_author.view(-1, 1, neg_embedding_af_author.shape[1])
-                neg_embedding_af_field = neg_embedding_af_field.view(-1, neg_embedding_af_field.shape[1], 1)
-                pos_af_out = torch.bmm(pos_embedding_af_author, pos_embedding_af_field)
-                neg_af_out = -torch.bmm(neg_embedding_af_author, neg_embedding_af_field)
+                pos_embedding_author = pos_embedding_author.view(-1, 1, pos_embedding_author.shape[1])
+                pos_embedding_field = pos_embedding_field.view(-1, pos_embedding_field.shape[1], 1)
+                neg_embedding_author = neg_embedding_author.view(-1, 1, neg_embedding_author.shape[1])
+                neg_embedding_field = neg_embedding_field.view(-1, neg_embedding_field.shape[1], 1)
+                pos_af_out = torch.bmm(pos_embedding_author, pos_embedding_field)
+                neg_af_out = -torch.bmm(neg_embedding_author, neg_embedding_field)
                 pos_embedding_pf_paper = pos_embedding_pf_paper.view(-1, 1, pos_embedding_pf_paper.shape[1])
                 pos_embedding_pf_field = pos_embedding_pf_field.view(-1, pos_embedding_pf_field.shape[1], 1)
                 neg_embedding_pf_paper = neg_embedding_pf_paper.view(-1, 1, neg_embedding_pf_paper.shape[1])
                 neg_embedding_pf_field = neg_embedding_pf_field.view(-1, neg_embedding_pf_field.shape[1], 1)
                 pos_pf_out = torch.bmm(pos_embedding_pf_paper, pos_embedding_pf_field)
                 neg_pf_out = -torch.bmm(neg_embedding_pf_paper, neg_embedding_pf_field)
-
-                val_loss.append(- torch.mean(F.logsigmoid(pos_af_out) + F.logsigmoid(neg_af_out))
-                                - torch.mean(F.logsigmoid(pos_pf_out) + F.logsigmoid(neg_pf_out)))
+                tmp = - torch.mean(F.logsigmoid(pos_af_out) + F.logsigmoid(neg_af_out)) \
+                      - torch.mean(F.logsigmoid(pos_pf_out) + F.logsigmoid(neg_pf_out))
+                if itr % 20 == 0:
+                    print(f"val loss in iter {itr} is {tmp}")
+                val_loss.append(tmp)
+            print(f"averaging over val loss: {val_loss}")
             val_loss = torch.mean(torch.tensor(val_loss))
+            print(f'Epoch {epoch + 1:>3}/{epochs}: train loss = {train_loss.item():.6f}, val_loss = {val_loss.item():.6f}')
             early_stopping(val_loss, net)
             if early_stopping.early_stop:
                 print('Early stopping!')
                 break
 
-    # test AF
+    # test
     net.load_state_dict(torch.load('checkpoint/checkpoint.pt'))
-    test_af_idx_generator = IndexGenerator(batch_size=batch_size, num_data=len(test_pos_author_field), shuffle=False)
-    net.eval()
-    pos_proba_list = []
-    neg_proba_list = []
-    with torch.no_grad():
-        for itr in range(test_af_idx_generator.num_iterations()):
-            test_idx_batch = test_af_idx_generator.next()
-            test_pos_batch = test_pos_author_field[test_idx_batch].tolist()
-            test_neg_batch = test_neg_author_field[test_idx_batch].tolist()
-            test_pos_g_lists, test_pos_indices_lists, test_pos_idx_batch_mapped_lists = parse_minibatch(
-                adjlists, edge_metapath_indices_list, test_pos_batch, device, neighbor_samples, no_masks,
-                [num_paper, num_paper + num_author])
-            test_neg_g_lists, test_neg_indices_lists, test_neg_idx_batch_mapped_lists = parse_minibatch(
-                adjlists, edge_metapath_indices_list, test_neg_batch, device, neighbor_samples, no_masks,
-                [num_paper, num_paper + num_author])
+    num_af, num_pf = len(test_pos_author_field), len(test_pos_paper_field)
+    if num_af > num_pf:
+        test_pos_paper_field = test_pos_paper_field[np.random.choice(num_pf, num_af, replace=True)]
+    else:
+        test_pos_author_field = test_pos_author_field[np.random.choice(num_af, num_pf, replace=True)]
+    test_steps = max(num_af, num_pf)
+    test_idx_generator = IndexGenerator(batch_size=batch_size, num_data=test_steps, shuffle=False)
 
-            [_, pos_embedding_author, pos_embedding_field], _ = net(
+    y_true_af = np.array([1] * test_steps + [0] * test_steps)
+    y_true_pf = np.array([1] * test_steps + [0] * test_steps)
+
+    net.eval()
+    pos_proba_af_list = []
+    neg_proba_af_list = []
+    pos_proba_pf_list = []
+    neg_proba_pf_list = []
+    with torch.no_grad():
+        for itr in range(test_idx_generator.num_iterations()):
+            test_idx_batch = test_idx_generator.next()
+            test_pos_af_batch = test_pos_author_field[test_idx_batch].tolist()
+            test_neg_af_batch = test_neg_author_field[test_idx_batch].tolist()
+            test_pos_pf_batch = test_pos_paper_field[test_idx_batch].tolist()
+            test_neg_pf_batch = test_neg_paper_field[test_idx_batch].tolist()
+            test_pos_g_lists, test_pos_indices_lists, test_pos_idx_batch_mapped_lists = parse_minibatch(
+                adjlists, edge_metapath_indices_lists, test_pos_af_batch, device, neighbor_samples,
+                no_masks, [num_paper, num_paper + num_author])
+            test_neg_g_lists, test_neg_indices_lists, test_neg_idx_batch_mapped_lists = parse_minibatch(
+                adjlists, edge_metapath_indices_lists, test_neg_af_batch, device, neighbor_samples,
+                no_masks, [num_paper, num_paper + num_author])
+            test_pos_pf_g_lists, test_pos_pf_indices_lists, test_pos_pf_idx_batch_mapped_lists = parse_minibatch(
+                adjlists, edge_metapath_indices_lists, test_pos_pf_batch, device, neighbor_samples,
+                no_masks, [0, num_paper + num_author], af=False)
+            test_neg_pf_g_lists, test_neg_pf_indices_lists, test_neg_pf_idx_batch_mapped_lists = parse_minibatch(
+                adjlists, edge_metapath_indices_lists, test_neg_pf_batch, device, neighbor_samples,
+                no_masks, [0, num_paper + num_author], af=False)
+
+            [pos_embedding_paper, pos_embedding_author, pos_embedding_field], _ = net(
                 (test_pos_g_lists, features_list, type_mask, test_pos_indices_lists, test_pos_idx_batch_mapped_lists))
-            [_, neg_embedding_author, neg_embedding_field], _ = net(
+            [neg_embedding_paper, neg_embedding_author, neg_embedding_field], _ = net(
                 (test_neg_g_lists, features_list, type_mask, test_neg_indices_lists, test_neg_idx_batch_mapped_lists))
+            [pos_embedding_pf_paper, pos_embedding_pf_author, pos_embedding_pf_field], _ = net(
+                (test_pos_pf_g_lists, features_list, type_mask, test_pos_pf_indices_lists,
+                 test_pos_pf_idx_batch_mapped_lists))
+            [neg_embedding_pf_paper, neg_embedding_pf_author, neg_embedding_pf_field], _ = net(
+                (test_neg_pf_g_lists, features_list, type_mask, test_neg_pf_indices_lists,
+                 test_neg_pf_idx_batch_mapped_lists))
             pos_embedding_author = pos_embedding_author.view(-1, 1, pos_embedding_author.shape[1])
             pos_embedding_field = pos_embedding_field.view(-1, pos_embedding_field.shape[1], 1)
             neg_embedding_author = neg_embedding_author.view(-1, 1, neg_embedding_author.shape[1])
             neg_embedding_field = neg_embedding_field.view(-1, neg_embedding_field.shape[1], 1)
+            pos_embedding_pf_paper = pos_embedding_pf_paper.view(-1, 1, pos_embedding_pf_paper.shape[1])
+            pos_embedding_pf_field = pos_embedding_pf_field.view(-1, pos_embedding_pf_field.shape[1], 1)
+            neg_embedding_pf_paper = neg_embedding_pf_paper.view(-1, 1, neg_embedding_pf_paper.shape[1])
+            neg_embedding_pf_field = neg_embedding_pf_field.view(-1, neg_embedding_pf_field.shape[1], 1)
 
-            pos_out = torch.flatten(torch.bmm(pos_embedding_author, pos_embedding_field))
-            neg_out = torch.flatten(torch.bmm(neg_embedding_author, neg_embedding_field))
-            pos_proba_list.append(torch.sigmoid(pos_out))
-            neg_proba_list.append(torch.sigmoid(neg_out))
-        y_proba_test = torch.cat(pos_proba_list + neg_proba_list)
-        y_proba_test = y_proba_test.cpu().numpy()
-    auc = roc_auc_score(y_true_af, y_proba_test)
-    ap = average_precision_score(y_true_af, y_proba_test)
+            pos_af_out = torch.flatten(torch.bmm(pos_embedding_author, pos_embedding_field))
+            neg_af_out = torch.flatten(torch.bmm(neg_embedding_author, neg_embedding_field))
+            pos_proba_af_list.append(torch.sigmoid(pos_af_out))
+            neg_proba_af_list.append(torch.sigmoid(neg_af_out))
+
+            pos_pf_out = torch.flatten(torch.bmm(pos_embedding_pf_paper, pos_embedding_pf_field))
+            neg_pf_out = torch.flatten(torch.bmm(neg_embedding_pf_paper, neg_embedding_pf_field))
+            pos_proba_pf_list.append(torch.sigmoid(pos_pf_out))
+            neg_proba_pf_list.append(torch.sigmoid(neg_pf_out))
+
+        y_proba_af_test = torch.cat(pos_proba_af_list + neg_proba_af_list)
+        y_proba_af_test = y_proba_af_test.cpu().numpy()
+        y_proba_pf_test = torch.cat(pos_proba_pf_list + neg_proba_pf_list)
+        y_proba_pf_test = y_proba_pf_test.cpu().numpy()
+    auc_af = roc_auc_score(y_true_af, y_proba_af_test)
+    ap_af = average_precision_score(y_true_af, y_proba_af_test)
+    auc_pf = roc_auc_score(y_true_pf, y_proba_pf_test)
+    ap_pf = average_precision_score(y_true_pf, y_proba_pf_test)
     print('Test Author-Field:')
-    print(f'AUC = {auc}')
-    print(f'AP = {ap}')
-
-    # test PF
-    test_pf_idx_generator = IndexGenerator(batch_size=batch_size, num_data=len(test_pos_paper_field), shuffle=False)
-    net.eval()
-    pos_proba_list = []
-    neg_proba_list = []
-    with torch.no_grad():
-        for itr in range(test_pf_idx_generator.num_iterations()):
-            test_idx_batch = test_pf_idx_generator.next()
-            test_pos_batch = test_pos_paper_field[test_idx_batch].tolist()
-            test_neg_batch = test_neg_paper_field[test_idx_batch].tolist()
-            test_pos_g_lists, test_pos_indices_lists, test_pos_idx_batch_mapped_lists = parse_minibatch(
-                adjlists, edge_metapath_indices_list, test_pos_batch, device, neighbor_samples, no_masks,
-                [0, num_paper + num_author])
-            test_neg_g_lists, test_neg_indices_lists, test_neg_idx_batch_mapped_lists = parse_minibatch(
-                adjlists, edge_metapath_indices_list, test_neg_batch, device, neighbor_samples, no_masks,
-                [0, num_paper + num_author])
-
-            [_, pos_embedding_author, pos_embedding_field], _ = net(
-                (test_pos_g_lists, features_list, type_mask, test_pos_indices_lists, test_pos_idx_batch_mapped_lists))
-            [_, neg_embedding_author, neg_embedding_field], _ = net(
-                (test_neg_g_lists, features_list, type_mask, test_neg_indices_lists, test_neg_idx_batch_mapped_lists))
-            pos_embedding_author = pos_embedding_author.view(-1, 1, pos_embedding_author.shape[1])
-            pos_embedding_field = pos_embedding_field.view(-1, pos_embedding_field.shape[1], 1)
-            neg_embedding_author = neg_embedding_author.view(-1, 1, neg_embedding_author.shape[1])
-            neg_embedding_field = neg_embedding_field.view(-1, neg_embedding_field.shape[1], 1)
-
-            pos_out = torch.flatten(torch.bmm(pos_embedding_author, pos_embedding_field))
-            neg_out = torch.flatten(torch.bmm(neg_embedding_author, neg_embedding_field))
-            pos_proba_list.append(torch.sigmoid(pos_out))
-            neg_proba_list.append(torch.sigmoid(neg_out))
-        y_proba_test = torch.cat(pos_proba_list + neg_proba_list)
-        y_proba_test = y_proba_test.cpu().numpy()
-    auc = roc_auc_score(y_true_pf, y_proba_test)
-    ap = average_precision_score(y_true_pf, y_proba_test)
-    print('Test Paper-Field:')
-    print(f'AUC = {auc}')
-    print(f'AP = {ap}')
+    print(f'AUC = {auc_af}, {auc_pf}')
+    print(f'AP = {ap_af}, {ap_pf}')
 
 
 if __name__ == '__main__':
@@ -296,9 +314,9 @@ if __name__ == '__main__':
     ap.add_argument('--num_heads', type=int, default=8)
     ap.add_argument('--attn-vec-dim', type=int, default=128)
     ap.add_argument('--rnn-type', default='RotatE0')
-    ap.add_argument('--batch-size', type=int, default=8)
+    ap.add_argument('--batch-size', type=int, default=32)
     ap.add_argument('--epochs', type=int, default=100)
-    ap.add_argument('--patience', type=int, default=5)
+    ap.add_argument('--patience', type=int, default=20)
     ap.add_argument('--samples', type=int, default=100)
     args = ap.parse_args()
 

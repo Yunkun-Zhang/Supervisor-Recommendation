@@ -191,7 +191,8 @@ class MAGNN(nn.Module):
     def forward(self, inputs):
         if self.use_minibatch:
             g_list, features, type_mask, edge_metapath_indices_list, target_idx_list = inputs
-
+            if not g_list:
+                return None
             # metapath-specific layers
             metapath_outs = [F.elu(metapath_layer(
                 (g, features, type_mask, edge_metapath_indices, target_idx)
@@ -265,14 +266,14 @@ class LPLayer(nn.Module):
 
         # ctr_ntype-specific layers
         h_paper = self.paper_layer(
-            (g_lists[0], features, type_mask, edge_metapath_indices_lists[0], target_idx_lists[0]))
+            (g_lists[0], features, type_mask, edge_metapath_indices_lists[0], target_idx_lists[0])) if g_lists[0] else None
         h_author = self.author_layer(
-            (g_lists[1], features, type_mask, edge_metapath_indices_lists[1], target_idx_lists[1]))
+            (g_lists[1], features, type_mask, edge_metapath_indices_lists[1], target_idx_lists[1])) if g_lists[1] else None
         h_field = self.field_layer(
             (g_lists[2], features, type_mask, edge_metapath_indices_lists[2], target_idx_lists[2]))
 
-        logits_paper = self.fc_paper(h_paper)
-        logits_author = self.fc_author(h_author)
+        logits_paper = self.fc_paper(h_paper) if g_lists[0] else None
+        logits_author = self.fc_author(h_author) if g_lists[1] else None
         logits_field = self.fc_field(h_field)
 
         return [logits_paper, logits_author, logits_field], [h_paper, h_author, h_field]

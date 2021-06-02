@@ -23,7 +23,8 @@ expected_metapaths = [
 
 
 def find_meta_path(data):
-    num_author, num_paper, num_field = len(data['authors']), len(data['papers']), len(data['fields'])  # index - id(in sql) mapping
+    # index - id(in sql) mapping
+    num_author, num_paper, num_field = len(data['authors']), len(data['papers']), len(data['fields'])
     dim = num_author + num_paper + num_field
 
     # create type mask
@@ -65,6 +66,10 @@ def find_meta_path(data):
              val_pos_paper_field=pf_pos_val,
              test_pos_paper_field=pf_pos_test)
 
+    """af_pos = np.load('../data/preprocessed/train_val_test_pos_author_field.npz')
+    pf_pos = np.load('../data/preprocessed/train_val_test_pos_paper_field.npz')
+    af_pos_train = af_pos['train_pos_author_field']
+    pf_pos_train = pf_pos['train_pos_paper_field']"""
     # create dicts for metapath
     # each dict has form: key: source - value: targets
     author_paper = defaultdict(list)
@@ -136,9 +141,11 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
                 left = right
 
     # create metapaths
-    """p_a_p = []
+    p_a_p = []
     for a, p_list in tqdm(author_paper.items(), desc='Metapath p-a-p'):
         p_a_p.extend([(p1, a, p2) for p1 in p_list for p2 in p_list])
+    print('Sorting p-a-p...')
+    p_a_p.sort(key=lambda x: [x[0], x[2], x[1]])
     p_a_p = np.array(p_a_p)
     p_a_p[:, 1] += num_paper
     save(0, (0, 1, 0), p_a_p)
@@ -146,13 +153,13 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
     p_f_p = []
     for f, p_list in tqdm(field_paper.items(), desc='Metapath p-f-p'):
         fp = np.array(field_paper[f])
-        p1_candidate_index = np.random.choice(len(fp), math.ceil(0.2 * len(fp)),
-                                              replace=False)
-        p2_candidate_index = np.random.choice(len(fp), math.ceil(0.2 * len(fp)),
-                                              replace=False)
+        p1_candidate_index = np.random.choice(len(fp), math.ceil(1 * len(fp)), replace=False)
+        p2_candidate_index = np.random.choice(len(fp), math.ceil(1 * len(fp)), replace=False)
         p1_candidate = fp[p1_candidate_index]
         p2_candidate = fp[p2_candidate_index]
         p_f_p.extend([(p1, f, p2) for p1 in p1_candidate for p2 in p2_candidate])
+    print('Sorting p-f-p...')
+    p_f_p.sort(key=lambda x: [x[0], x[2], x[1]])
     p_f_p = np.array(p_f_p)
     p_f_p[:, 1] += num_paper + num_author
     save(0, (0, 2, 0), p_f_p)
@@ -160,6 +167,8 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
     a_p_a = []
     for p, a_list in tqdm(paper_author.items(), desc='Metapath a-p-a'):
         a_p_a.extend([(a1, p, a2) for a1 in a_list for a2 in a_list])
+    print('Sorting a-p-a...')
+    a_p_a.sort(key=lambda x: [x[0], x[2], x[1]])
     a_p_a = np.array(a_p_a)
     a_p_a[:, [0, 2]] += num_paper
     save(1, (1, 0, 1), a_p_a)
@@ -167,6 +176,8 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
     a_f_a = []
     for f, a_list in tqdm(field_author.items(), desc='Metapath a-f-a'):
         a_f_a.extend([(a1, f, a2) for a1 in a_list for a2 in a_list])
+    print('Sorting a-f-a...')
+    a_f_a.sort(key=lambda x: [x[0], x[2], x[1]])
     a_f_a = np.array(a_f_a)
     a_f_a += num_paper
     a_f_a[:, 1] += num_author
@@ -177,9 +188,11 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
         f_f_f.extend([(f1, f, f2) for f1 in f_list for f2 in f_list])
     for f, f_list in tqdm(child_parent_field.items(), desc='Metapath f-fc-f'):
         f_f_f.extend([(f1, f, f2) for f1 in f_list for f2 in f_list])
+    print('Sorting f-f-f...')
+    f_f_f.sort(key=lambda x: [x[0], x[2], x[1]])
     f_f_f = np.array(f_f_f)
     f_f_f += num_paper + num_author
-    save(2, (2, 2, 2), f_f_f)"""
+    save(2, (2, 2, 2), f_f_f)
 
     p_f_a_f_p = []
     # first obtain FAF
@@ -196,13 +209,13 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
             continue
         fp1 = np.array(field_paper[f1])
         fp2 = np.array(field_paper[f2])
-        p1_candidate_index = np.random.choice(len(fp1), math.ceil(0.1 * len(fp1)),
-                                              replace=False)
+        p1_candidate_index = np.random.choice(len(fp1), math.ceil(1 * len(fp1)), replace=False)
         p1_candidate = fp1[p1_candidate_index]
-        p2_candidate_index = np.random.choice(len(fp2), math.ceil(0.1 * len(fp2)),
-                                              replace=False)
+        p2_candidate_index = np.random.choice(len(fp2), math.ceil(1 * len(fp2)), replace=False)
         p2_candidate = fp2[p2_candidate_index]
         p_f_a_f_p.extend([(p1, f1, a, f2, p2) for p1 in p1_candidate for p2 in p2_candidate])
+    print('Sorting p-f-a-f-p...')
+    p_f_a_f_p.sort(key=lambda x: [x[0], x[4], x[1], x[2], x[3]])
     p_f_a_f_p = np.array(p_f_a_f_p)
     p_f_a_f_p[:, [1, 2, 3]] += num_paper
     p_f_a_f_p[:, [1, 3]] += num_author
@@ -220,13 +233,13 @@ def get_meta_paths(author_paper, paper_author, author_field, field_author, child
             continue
         fa1 = np.array(field_author[f1])
         fa2 = np.array(field_author[f2])
-        a1_candidate_index = np.random.choice(len(fa1), math.ceil(0.1 * len(fa1)),
-                                              replace=False)
+        a1_candidate_index = np.random.choice(len(fa1), math.ceil(1 * len(fa1)), replace=False)
         a1_candidate = fa1[a1_candidate_index]
-        a2_candidate_index = np.random.choice(len(fa2), math.ceil(0.1 * len(fa2)),
-                                              replace=False)
+        a2_candidate_index = np.random.choice(len(fa2), math.ceil(1 * len(fa2)), replace=False)
         a2_candidate = fa2[a2_candidate_index]
         a_f_p_f_a.extend([(a1, f1, p, f2, a2) for a1 in a1_candidate for a2 in a2_candidate])
+    print('Sorting a-f-p-f-a...')
+    a_f_p_f_a.sort(key=lambda x: [x[0], x[4], x[1], x[2], x[3]])
     a_f_p_f_a = np.array(a_f_p_f_a)
     a_f_p_f_a[:, [0, 1, 3, 4]] += num_paper
     a_f_p_f_a[:, [1, 3]] += num_author
@@ -242,8 +255,8 @@ def load_mp(path='../data/preprocessed'):
                 adj_list.append([line.strip() for line in f])
             with open(path + f'/{mode}/' + '-'.join(map(str, metapath)) + '_idx.pickle', 'rb') as f:
                 idx_list.append(pickle.load(f))
-        adj_lists.append(adj_list[:])
-        idx_lists.append(idx_list[:])
+        adj_lists.append(adj_list)
+        idx_lists.append(idx_list)
     type_mask = np.load(path + '/type_mask.npy')
     pos_af = np.load(path + '/train_val_test_pos_author_field.npz')
     pos_pf = np.load(path + '/train_val_test_pos_paper_field.npz')

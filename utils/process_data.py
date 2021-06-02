@@ -251,11 +251,11 @@ def parent_field(field_dict, fields):
     return field_dict, fields, field_parents
 
 
-def get_selected_fields():
+"""def get_selected_fields():
     '''
     filter by level 0 field = Computer Science
     '''
-    all_selected_fields = []
+    all_selected_fields = set()
     acemap = {'user': 'mobilenet',
               'passwd': 'mobilenet',
               'host': '202.120.36.29',
@@ -276,8 +276,8 @@ def get_selected_fields():
         res = cursor.fetchall()
         target_id = []
         for field in res:
-            target_id.append(field)
-            all_selected_fields.extend(target_id)
+            target_id.append(field[0])
+            all_selected_fields.add(field[0])
 
     return all_selected_fields
 
@@ -289,16 +289,17 @@ def prune_data(data):
     all_fields = data['fields']  # index - id mapping
     # dumped_fields = np.setdiff1d(all_fields, accepted_fields)
     new_fields = set(all_fields).intersection(accepted_fields)
+    print(len(new_fields))
 
-    field_author, new_author_mapping_dict = filter_other(all_fields, new_fields, "author")
-    field_paper, new_paper_mapping_dict = filter_other(all_fields, new_fields, "paper")
     field_parnet, new_field_mapping_dict = filter_field(all_fields, new_fields)
+    field_author, new_author_mapping_dict = filter_other(all_fields, new_fields, "author", new_field_mapping_dict)
+    field_paper, new_paper_mapping_dict = filter_other(all_fields, new_fields, "paper", new_field_mapping_dict)
 
     # revise indices of edges
     new_field_author = revise_dct_by_mapping(field_author, new_field_mapping_dict, new_author_mapping_dict)
     new_field_paper = revise_dct_by_mapping(field_paper, new_field_mapping_dict, new_paper_mapping_dict)
     new_field_parent = revise_dct_by_mapping(field_parnet, new_field_mapping_dict, new_field_mapping_dict)
-    author_paper = np.load(f'../data/author_paper.npy')
+    author_paper = np.load(f'../data/old2/author_paper.npy')
     new_author_paper = filter_ap(author_paper, new_author_mapping_dict, new_paper_mapping_dict)
 
     # revise mapping of index to ids
@@ -308,7 +309,6 @@ def prune_data(data):
 
     return new_field_author, new_field_paper, new_field_parent, new_author_paper,\
            paper_mapping, field_mapping, author_mapping
-
 
 
 def filter_ap(ap_edge_list, a_mapping_dct, p_mapping_dct):
@@ -321,23 +321,24 @@ def filter_ap(ap_edge_list, a_mapping_dct, p_mapping_dct):
         author_paper[a_mapping_dct[a]].append(p_mapping_dct[p])
     return author_paper
 
-def filter_other(old_fields, fields, name):
-    other_field = np.load(f'../data/{name}_field.npy')
+
+def filter_other(old_fields, fields, name, new_field_mapping):
+    other_field = np.load(f'../data/old2/{name}_field.npy')
     field_other = defaultdict(list)  # field_id: other
     for o, f in other_field:
-        if old_fields[f] in fields:
-            field_other[old_fields[f]].append(o)
+        if old_fields[f] in fields and f in new_field_mapping:
+            field_other[f].append(o)
     new_other_mapping_dct = get_new_mapping(field_other)
     return field_other, new_other_mapping_dct
 
 
 def filter_field(old_fields, fields):
-    field_parent = np.load(f'../data/field_parent.npy')
+    field_parent = np.load(f'../data/old2/field_parent.npy')
     new_field_parent = defaultdict(list)
     for f, p in field_parent:
         if not old_fields[f] in fields or not old_fields[p] in fields:
             continue
-        new_field_parent[old_fields[f]].append(old_fields[p])
+        new_field_parent[f].append(p)
     new_field_mapping_dct = get_new_mapping(new_field_parent, include_key=True)
     return new_field_parent, new_field_mapping_dct
 
@@ -359,7 +360,7 @@ def get_new_mapping(dct, include_key=False):
 
 def revise_dct_by_mapping(dct, key_mapping, value_mapping):
     new_dct = defaultdict()
-    for key, value in dct:
+    for key, value in dct.items():
         new_value = list(map(lambda x: value_mapping[x], value))
         new_dct[key_mapping[key]] = new_value
     return new_dct
@@ -368,8 +369,8 @@ def revise_dct_by_mapping(dct, key_mapping, value_mapping):
 def convert_dct_to_array_mapping(mapping_dct, original_mapping, authors=False):
     new_mapping = np.empty(len(mapping_dct.keys()))
     for key, value in mapping_dct.items():
-        new_mapping[value] = original_mapping[key] if not authors else original_mapping[key]['author_id']
-    return new_mapping
+        new_mapping[value] = original_mapping[key] if not authors else original_mapping[key]['id']
+    return new_mapping"""
 
 
 def load_data(path='../data'):
@@ -409,9 +410,9 @@ if __name__ == '__main__':
     np.save('../data/author_field', author_field)
     field_dict, fields, field_parent = parent_field(field_dict, fields)
     np.save('../data/fields', fields)
-    np.save('../data/field_parent', field_parent)"""
+    np.save('../data/field_parent', field_parent)
     fields = np.load('../data/fields.npy')
     papers = np.load('../data/papers.npy')
     paper_dict = list_to_dict(papers)
     paper_field = paper_field_edges(paper_dict, fields)
-    np.save('../data/paper_field', paper_field)
+    np.save('../data/paper_field', paper_field)"""
